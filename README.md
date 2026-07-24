@@ -1,45 +1,125 @@
-# Gnosis
+<div align="center">
 
-Knowledge base personale che raccoglie contenuti autorizzati da Telegram, Discord e Reddit, crea digest settimanali e risponde con citazioni alle fonti originali.
+# 🧠 Gnosis
 
-## Requisiti
+**A private, source-grounded knowledge base for Telegram, Discord, and Reddit.**
 
-- Docker con Compose
-- credenziali OpenAI
-- almeno una sorgente autorizzata
-- credenziali delle piattaforme utilizzate
+[![CI](https://github.com/PrimeBuild-pc/Gnosis/actions/workflows/ci.yml/badge.svg)](https://github.com/PrimeBuild-pc/Gnosis/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 
-## Avvio
+Collect authorized community content, filter noise, generate weekly digests, and ask questions with citations back to the original messages.
+
+</div>
+
+---
+
+## Overview
+
+Gnosis turns selected online communities into a searchable personal knowledge base. It collects content through official platform APIs, enriches and embeds useful messages, and stores everything in PostgreSQL with pgvector.
+
+Answers are generated only from retrieved content and include links to the original platform messages whenever available.
+
+### Key features
+
+- Official connectors for **Telegram**, **Discord**, and **Reddit**
+- Explicit source allowlist
+- Idempotent ingestion and message update handling
+- Relevance filtering, tagging, chunking, and embeddings
+- Hybrid PostgreSQL full-text and pgvector retrieval
+- Source-grounded RAG answers with validated citations
+- Weekly cited digests
+- Private web interface protected with HTTP Basic authentication
+- Reproducible deployment with Docker Compose
+
+## Architecture
+
+<div align="center">
+
+```text
+Telegram ─┐
+Discord  ─┼─> Async worker ─> Filter & embed ─> PostgreSQL + pgvector
+Reddit   ─┘                                      │
+                                                   ├─> Hybrid RAG search
+                                                   ├─> Weekly digest
+                                                   └─> FastAPI web interface
+```
+
+</div>
+
+| Component | Technology | Purpose |
+|---|---|---|
+| Collectors | Telethon, discord.py, asyncpraw | Authorized platform ingestion |
+| Processing | Python, OpenAI API | Filtering, classification, chunking, embeddings |
+| Storage | PostgreSQL 16, pgvector | Messages, metadata, full-text index, vectors |
+| Application | FastAPI, vanilla HTML/CSS/JS | Private chat, sources, and digest archive |
+| Operations | Docker Compose | Database, worker, and web services |
+
+## 🚀 Quick start
+
+### Requirements
+
+- Docker with Compose
+- An OpenAI API key
+- Credentials for each enabled platform
+- At least one authorized source
+
+### 1. Clone and configure
 
 ```bash
+git clone https://github.com/PrimeBuild-pc/Gnosis.git
+cd Gnosis
 cp .env.example .env
 cp config/sources.example.toml config/sources.toml
-# Compilare .env e config/sources.toml
+```
+
+Edit `.env` and `config/sources.toml` with your credentials and allowlisted source IDs. Both files are excluded from Git.
+
+### 2. Build and initialize the database
+
+```bash
 docker compose build
 docker compose run --rm web gnosis db-init
 ```
 
-Per Telegram, creare una volta la sessione persistente:
+### 3. Create the Telegram session
+
+Skip this step if Telegram is not enabled.
 
 ```bash
 docker compose run --rm worker gnosis telegram-login
 ```
 
-Avviare poi i servizi:
+The generated session is stored in a private Docker volume and must be treated as a credential.
+
+### 4. Start Gnosis
 
 ```bash
 docker compose up -d
 ```
 
-L'interfaccia è disponibile su <http://127.0.0.1:8080>. Il browser richiederà `GNOSIS_USERNAME` e `GNOSIS_PASSWORD` alla prima chiamata API.
+Open <http://127.0.0.1:8080> and sign in with `GNOSIS_USERNAME` and `GNOSIS_PASSWORD`.
 
-## Configurazione
+## Configuration
 
-Le credenziali vanno soltanto in `.env`, escluso da Git. L'allowlist è in `config/sources.toml`, anch'esso escluso da Git. Il formato completo è mostrato in `config/sources.example.toml`.
+| Variable | Required | Description |
+|---|---:|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection URL |
+| `OPENAI_API_KEY` | Yes | API key used for classification, embeddings, and answers |
+| `OPENAI_CHAT_MODEL` | Yes | Chat model name |
+| `OPENAI_EMBEDDING_MODEL` | Yes | Embedding model; output must contain 1,536 dimensions |
+| `GNOSIS_USERNAME` | Yes | Private web interface username |
+| `GNOSIS_PASSWORD` | Yes | Private web interface password |
+| `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | If enabled | Telegram client credentials |
+| `DISCORD_BOT_TOKEN` | If enabled | Official Discord bot token |
+| `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | If enabled | Reddit OAuth credentials |
 
-Il modello embedding deve produrre vettori da 1536 dimensioni; il valore predefinito `text-embedding-3-small` è compatibile.
+See [`.env.example`](.env.example) for every available setting and [`config/sources.example.toml`](config/sources.example.toml) for the source allowlist format.
 
-## Comandi
+The default embedding model is `text-embedding-3-small`, which matches the database schema's 1,536 dimensions.
+
+## Commands
 
 ```bash
 gnosis db-init
@@ -50,26 +130,40 @@ gnosis digest
 gnosis prune --before 2025-01-01
 ```
 
-I connettori eseguono un backfill iniziale degli ultimi 200 elementi accessibili e poi restano in ascolto o polling. Gli inserimenti sono idempotenti.
+Connectors backfill the latest 200 accessible items, then continue through real-time events or polling. Repeated ingestion is safe and does not duplicate platform messages.
 
-## Limiti di accesso
+## 🔒 Platform access and privacy
 
-- **Discord:** soltanto bot ufficiale autorizzato nel server; i self-bot non sono supportati.
-- **Telegram:** client associato al proprio account e limitato alle chat esplicitamente configurate.
-- **Reddit:** OAuth e API ufficiale, rispettando limiti e termini applicabili.
+- **Discord:** only an official bot authorized by the server administrators is supported. User tokens and self-bots are explicitly unsupported.
+- **Telegram:** the client is limited to chats explicitly listed in `sources.toml` and accessible by the authenticated account.
+- **Reddit:** access uses official OAuth APIs and must follow current rate limits and developer terms.
+- **Web access:** the service binds to `127.0.0.1` by default. Use a private network or an HTTPS reverse proxy for remote access.
+- **Secrets:** never commit `.env`, `sources.toml`, Telegram session files, or database backups.
 
-Consultare [docs/setup-platforms.md](docs/setup-platforms.md) prima di configurare i connettori.
+Read the complete [platform setup guide](docs/setup-platforms.md) before enabling collectors.
 
-## Sviluppo
+## Development
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 ruff check .
+ruff format --check .
 pytest
 ```
 
-## Operazioni e backup
+The CI workflow runs linting, tests, and a Docker image build on every push and pull request.
 
-Vedere [docs/operations.md](docs/operations.md).
+## Documentation
+
+- [Product brief](docs/product-brief.md)
+- [Platform setup](docs/setup-platforms.md)
+- [Operations, backup, and retention](docs/operations.md)
+- [Implementation plan](IMPLEMENTATION_PLAN.md)
+
+---
+
+<div align="center">
+<sub>Built for private, evidence-backed community research.</sub>
+</div>

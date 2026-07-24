@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "gnosis-kb"
 version = "0.1.0"
-description = "Knowledge base privata per community Telegram, Discord e Reddit"
+description = "Private, source-grounded knowledge base for Telegram, Discord, and Reddit"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
