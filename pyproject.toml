@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gnosis-kb"
+version = "0.1.0"
+description = "Knowledge base privata per community Telegram, Discord e Reddit"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "asyncpraw>=7.8,<8",
+  "discord.py>=2.4,<3",
+  "fastapi>=0.115,<1",
+  "openai>=1.60,<3",
+  "pgvector>=0.3,<1",
+  "psycopg[binary,pool]>=3.2,<4",
+  "telethon>=1.38,<2",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "ruff>=0.9,<1"]
+
+[project.scripts]
+gnosis = "gnosis.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gnosis = ["static/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100

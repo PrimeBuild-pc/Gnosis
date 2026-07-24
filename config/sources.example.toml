@@ -1,0 +1,19 @@
+# Copiare come config/sources.toml. Usare ID stabili, non nomi visualizzati.
+
+[[telegram]]
+chat_id = "-1001234567890"
+name = "AI Community"
+enabled = true
+topics = ["AI", "security", "software"]
+
+[[discord]]
+channel_id = "123456789012345678"
+name = "security"
+enabled = true
+topics = ["security"]
+
+[[reddit]]
+subreddit = "MachineLearning"
+name = "r/MachineLearning"
+enabled = true
+topics = ["AI", "research"]

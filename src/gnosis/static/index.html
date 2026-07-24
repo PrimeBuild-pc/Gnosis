@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gnosis</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header><h1>Gnosis</h1><p>Knowledge base privata con fonti verificabili</p></header>
+  <main>
+    <nav>
+      <button data-view="chat" class="active">Chat</button>
+      <button data-view="digests">Digest</button>
+      <button data-view="sources">Sorgenti</button>
+    </nav>
+    <section id="chat" class="view active">
+      <form id="question-form">
+        <label for="question">Domanda</label>
+        <textarea id="question" maxlength="4000" required placeholder="Cosa è emerso questa settimana sulla sicurezza?"></textarea>
+        <button type="submit">Cerca nelle fonti</button>
+      </form>
+      <div id="answer" aria-live="polite"></div>
+    </section>
+    <section id="digests" class="view"><button id="refresh-digests">Aggiorna</button><div id="digest-list"></div></section>
+    <section id="sources" class="view"><button id="refresh-sources">Aggiorna</button><div id="source-list"></div></section>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
