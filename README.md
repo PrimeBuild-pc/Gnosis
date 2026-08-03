@@ -1,17 +1,13 @@
-<div align="center">
+<h1 align="center">🧠 Gnosis</h1>
 
-# 🧠 Gnosis
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
+</p>
 
-**A private, source-grounded knowledge base for Telegram, Discord, and Reddit.**
-
-[![CI](https://github.com/PrimeBuild-pc/Gnosis/actions/workflows/ci.yml/badge.svg)](https://github.com/PrimeBuild-pc/Gnosis/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-
-Collect authorized community content, filter noise, generate weekly digests, and ask questions with citations back to the original messages.
-
-</div>
+<p align="center"><i>A private, source-grounded knowledge base for Telegram, Discord, and Reddit. Collect authorized community content, filter noise, generate weekly digests, and ask questions with citations back to the original messages.</i></p>
 
 ---
 
@@ -142,6 +138,53 @@ Connectors backfill the latest 200 accessible items, then continue through real-
 
 Read the complete [platform setup guide](docs/setup-platforms.md) before enabling collectors.
 
+## 🖥️ Running on Oracle Cloud (Always Free)
+
+Gnosis fits comfortably on an ARM Ampere instance (4 OCPU, 24 GB RAM — always free).
+
+### Prerequisites
+
+```bash
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker $USER  # log out and back in
+```
+
+### Deploy
+
+```bash
+git clone https://github.com/PrimeBuild-pc/Gnosis.git
+cd Gnosis
+
+# Create config files (edit with your values)
+cp .env.example .env
+cp config/sources.example.toml config/sources.toml
+
+# Build and start
+docker compose build
+docker compose run --rm web gnosis db-init
+docker compose up -d
+```
+
+### Security
+
+Bind to localhost and use nginx as a TLS reverse proxy:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name gnosis.your-domain.com;
+    location / { proxy_pass http://127.0.0.1:8080; }
+}
+```
+
+### Auto-start on boot
+
+```bash
+# Docker Compose auto-restarts with restart: unless-stopped
+# Ensure Docker daemon starts on boot
+sudo systemctl enable docker
+```
+
 ## Development
 
 ```bash
@@ -164,6 +207,8 @@ The CI workflow runs linting, tests, and a Docker image build on every push and 
 
 ---
 
-<div align="center">
+## 📄 License
+
+MIT © PrimeBuild — see [LICENSE](LICENSE) for details.
+
 <sub>Built for private, evidence-backed community research.</sub>
-</div>
