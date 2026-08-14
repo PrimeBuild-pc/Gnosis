@@ -27,7 +27,7 @@ class RAG:
         question = question.strip()
         if not question:
             raise ValueError("Domanda vuota")
-        embedding = (await self.llm.embed([question]))[0]
+        embedding = await self.llm.embed_query(question)
         rows = self.db.search(question, embedding)
         if not rows:
             return {

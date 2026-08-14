@@ -1,5 +1,7 @@
 # Configurazione delle piattaforme
 
+`./install.sh` alla radice del repo guida a voce tutta questa configurazione (password admin, provider chat gratuito, credenziali piattaforme) e avvia lo stack: è il percorso consigliato. Questa pagina resta il riferimento per la configurazione manuale o per aggiungere una piattaforma in un secondo momento.
+
 ## Telegram
 
 1. Creare `api_id` e `api_hash` su <https://my.telegram.org>.

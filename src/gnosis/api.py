@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/search", dependencies=[Depends(authenticate)])
     async def search(query: Query, request: Request):
-        vector = (await request.app.state.rag.llm.embed([query.question]))[0]
+        vector = await request.app.state.rag.llm.embed_query(query.question)
         rows = request.app.state.db.search(query.question, vector)
         return [
             {

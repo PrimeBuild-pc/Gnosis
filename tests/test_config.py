@@ -29,6 +29,25 @@ def test_telegram_allowed_users_parsed_as_ints(monkeypatch: pytest.MonkeyPatch):
     assert Settings.from_env().telegram_allowed_user_ids == (111, 222, 333)
 
 
+def test_embedding_defaults_to_local_no_key_required(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("GNOSIS_EMBEDDING_PROVIDER", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    settings = Settings.from_env()
+    assert settings.embedding_provider == "local"
+    assert settings.embedding_model == "intfloat/multilingual-e5-small"
+    assert settings.embedding_dimensions == 384
+
+
+def test_embedding_openai_provider_reads_openai_model(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("GNOSIS_EMBEDDING_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    monkeypatch.setenv("GNOSIS_EMBEDDING_DIMENSIONS", "1536")
+    settings = Settings.from_env()
+    assert settings.embedding_provider == "openai"
+    assert settings.embedding_model == "text-embedding-3-small"
+    assert settings.embedding_dimensions == 1536
+
+
 def test_load_sources(tmp_path: Path):
     path = tmp_path / "sources.toml"
     path.write_text('[[reddit]]\nsubreddit="python"\ntopics=["software"]\n', encoding="utf-8")

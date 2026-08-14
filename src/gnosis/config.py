@@ -24,7 +24,9 @@ class Settings:
     chat_api_key: str = ""
     chat_base_url: str | None = None
     chat_model: str = "gpt-4o-mini"
-    embedding_model: str = "text-embedding-3-small"
+    embedding_provider: str = "local"
+    embedding_model: str = "intfloat/multilingual-e5-small"
+    embedding_dimensions: int = 384
     telegram_api_id: int | None = None
     telegram_api_hash: str = ""
     telegram_session: str = "data/telegram/gnosis"
@@ -50,6 +52,12 @@ class Settings:
         openai_api_key = os.getenv("OPENAI_API_KEY", "")
         openai_base_url = os.getenv("OPENAI_BASE_URL") or None
         allowed_users = os.getenv("GNOSIS_TELEGRAM_ALLOWED_USERS", "")
+        embedding_provider = os.getenv("GNOSIS_EMBEDDING_PROVIDER", cls.embedding_provider)
+        embedding_model = (
+            os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+            if embedding_provider == "openai"
+            else os.getenv("GNOSIS_EMBEDDING_MODEL", cls.embedding_model)
+        )
         return cls(
             database_url=os.getenv("DATABASE_URL", cls.database_url),
             openai_api_key=openai_api_key,
@@ -57,7 +65,11 @@ class Settings:
             chat_api_key=os.getenv("GNOSIS_CHAT_API_KEY", "").strip() or openai_api_key,
             chat_base_url=os.getenv("GNOSIS_CHAT_BASE_URL") or openai_base_url,
             chat_model=os.getenv("OPENAI_CHAT_MODEL", cls.chat_model),
-            embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", cls.embedding_model),
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            embedding_dimensions=int(
+                os.getenv("GNOSIS_EMBEDDING_DIMENSIONS", str(cls.embedding_dimensions))
+            ),
             telegram_api_id=int(api_id) if api_id else None,
             telegram_api_hash=os.getenv("TELEGRAM_API_HASH", ""),
             telegram_session=os.getenv("TELEGRAM_SESSION", cls.telegram_session),

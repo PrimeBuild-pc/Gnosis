@@ -1,4 +1,6 @@
-<h1 align="center">🧠 Gnosis</h1>
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="Gnosis" width="100%">
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.11%2B-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python">
@@ -57,11 +59,25 @@ Reddit   ─┘                                      │
 ### Requirements
 
 - Docker with Compose
-- An OpenAI API key
-- Credentials for each enabled platform
-- At least one authorized source
+- A free API key for chat (embeddings run locally, no key needed) — see [Configuration](#configuration)
+- Credentials for each enabled platform (optional, can be added later)
 
-### 1. Clone and configure
+### Guided install (recommended)
+
+```bash
+git clone https://github.com/PrimeBuild-pc/Gnosis.git
+cd Gnosis
+./install.sh
+```
+
+Walks you through the admin password, a free chat provider (OpenRouter/Groq/NVIDIA NIM/OpenAI), and optional platform credentials, then builds/pulls the image and starts everything. Re-run it any time to reconfigure — it never overwrites values you don't touch.
+
+If Telegram is enabled, run `docker compose run --rm worker gnosis telegram-login` once afterwards to create the session (not automated — it needs an interactive phone/OTP login).
+
+### Manual install
+
+<details>
+<summary>Expand for the step-by-step manual setup</summary>
 
 ```bash
 git clone https://github.com/PrimeBuild-pc/Gnosis.git
@@ -72,28 +88,14 @@ cp config/sources.example.toml config/sources.toml
 
 Edit `.env` and `config/sources.toml` with your credentials and allowlisted source IDs. Both files are excluded from Git.
 
-### 2. Build and initialize the database
-
 ```bash
 docker compose build
 docker compose run --rm web gnosis db-init
-```
-
-### 3. Create the Telegram session
-
-Skip this step if Telegram is not enabled.
-
-```bash
-docker compose run --rm worker gnosis telegram-login
-```
-
-The generated session is stored in a private Docker volume and must be treated as a credential.
-
-### 4. Start Gnosis
-
-```bash
+docker compose run --rm worker gnosis telegram-login  # skip if Telegram is disabled
 docker compose up -d
 ```
+
+</details>
 
 Open <http://127.0.0.1:8080> and sign in with `GNOSIS_USERNAME` and `GNOSIS_PASSWORD`.
 
@@ -102,10 +104,11 @@ Open <http://127.0.0.1:8080> and sign in with `GNOSIS_USERNAME` and `GNOSIS_PASS
 | Variable | Required | Description |
 |---|---:|---|
 | `DATABASE_URL` | Yes | PostgreSQL connection URL |
-| `OPENAI_API_KEY` | Yes | API key used for embeddings, and the fallback for chat |
+| `GNOSIS_EMBEDDING_PROVIDER` | No | `local` (default, free, runs in-container via fastembed) or `openai` |
+| `GNOSIS_EMBEDDING_MODEL` / `GNOSIS_EMBEDDING_DIMENSIONS` | No | Local embedding model and vector size (default: `intfloat/multilingual-e5-small`, 384) |
+| `GNOSIS_CHAT_API_KEY` / `GNOSIS_CHAT_BASE_URL` | Yes | OpenAI-compatible chat provider (classification, RAG, digest). Point it at a free tier — OpenRouter, NVIDIA NIM, Groq — or OpenAI. Falls back to `OPENAI_API_KEY`/`OPENAI_BASE_URL` if unset |
 | `OPENAI_CHAT_MODEL` | Yes | Chat model name (set it to match whichever provider is used for chat) |
-| `OPENAI_EMBEDDING_MODEL` | Yes | Embedding model; output must contain 1,536 dimensions |
-| `GNOSIS_CHAT_API_KEY` / `GNOSIS_CHAT_BASE_URL` | No | Separate OpenAI-compatible provider for chat (classification, RAG, digest). Falls back to `OPENAI_API_KEY`/`OPENAI_BASE_URL`. Lets you point classification/RAG/digest at a free-tier provider (OpenRouter, NVIDIA NIM, Groq, ...) while keeping OpenAI for embeddings |
+| `OPENAI_API_KEY` | Only if `GNOSIS_EMBEDDING_PROVIDER=openai` or as chat fallback | OpenAI key, needed only when opting into OpenAI for embeddings or chat |
 | `GNOSIS_USERNAME` | Yes | Private web interface username |
 | `GNOSIS_PASSWORD` | Yes | Private web interface password |
 | `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | If enabled | Telegram client credentials |
@@ -116,7 +119,7 @@ Open <http://127.0.0.1:8080> and sign in with `GNOSIS_USERNAME` and `GNOSIS_PASS
 
 See [`.env.example`](.env.example) for every available setting and [`config/sources.example.toml`](config/sources.example.toml) for the source allowlist format.
 
-The default embedding model is `text-embedding-3-small`, which matches the database schema's 1,536 dimensions.
+Embeddings default to a local multilingual model (`intfloat/multilingual-e5-small`, 384 dimensions, via [fastembed](https://github.com/qdrant/fastembed)) — no API key, no cost, and it runs fine on a small ARM instance. Switching to OpenAI embeddings requires matching `GNOSIS_EMBEDDING_DIMENSIONS` to the chosen model and re-applying `migrations/002_local_embeddings.sql` (or a custom one) for the new vector size.
 
 ## Commands
 
@@ -166,15 +169,7 @@ sudo usermod -aG docker $USER  # log out and back in
 ```bash
 git clone https://github.com/PrimeBuild-pc/Gnosis.git
 cd Gnosis
-
-# Create config files (edit with your values)
-cp .env.example .env
-cp config/sources.example.toml config/sources.toml
-
-# Build and start
-docker compose build
-docker compose run --rm web gnosis db-init
-docker compose up -d
+./install.sh
 ```
 
 ### Security

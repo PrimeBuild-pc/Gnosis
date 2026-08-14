@@ -14,6 +14,7 @@ services:
       retries: 10
 
   web:
+    image: ghcr.io/primebuild-pc/gnosis:latest
     build: .
     env_file: .env
     environment:
@@ -29,6 +30,7 @@ services:
       - ./config:/app/config:ro
 
   worker:
+    image: ghcr.io/primebuild-pc/gnosis:latest
     build: .
     env_file: .env
     command: ["gnosis", "worker"]

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Gnosis logo">
+  <rect width="512" height="512" rx="112" fill="#111827"/>
+  <g stroke="#3b82f6" stroke-width="6" stroke-opacity="0.85">
+    <line x1="256" y1="256" x2="362" y2="150"/>
+    <line x1="256" y1="256" x2="150" y2="150"/>
+    <line x1="256" y1="256" x2="150" y2="362"/>
+    <line x1="256" y1="256" x2="362" y2="362"/>
+  </g>
+  <circle cx="362" cy="150" r="30" fill="#60a5fa"/>
+  <circle cx="150" cy="150" r="30" fill="#60a5fa"/>
+  <circle cx="150" cy="362" r="30" fill="#60a5fa"/>
+  <circle cx="362" cy="362" r="30" fill="#60a5fa"/>
+  <circle cx="256" cy="256" r="58" fill="#2563eb"/>
+  <path d="M 230 256 L 248 274 L 286 234" fill="none" stroke="#f9fafb" stroke-width="15"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

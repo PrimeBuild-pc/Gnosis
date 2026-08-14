@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="Gnosis banner">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#1f2937"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="300" fill="url(#bg)"/>
+
+  <g transform="translate(60,60)">
+    <rect width="180" height="180" rx="40" fill="#0b1120"/>
+    <g stroke="#3b82f6" stroke-width="4" stroke-opacity="0.85">
+      <line x1="90" y1="90" x2="140" y2="52"/>
+      <line x1="90" y1="90" x2="40" y2="52"/>
+      <line x1="90" y1="90" x2="40" y2="128"/>
+      <line x1="90" y1="90" x2="140" y2="128"/>
+    </g>
+    <circle cx="140" cy="52" r="12" fill="#60a5fa"/>
+    <circle cx="40" cy="52" r="12" fill="#60a5fa"/>
+    <circle cx="40" cy="128" r="12" fill="#60a5fa"/>
+    <circle cx="140" cy="128" r="12" fill="#60a5fa"/>
+    <circle cx="90" cy="90" r="22" fill="#2563eb"/>
+    <path d="M 80 90 L 88 98 L 102 82" fill="none" stroke="#f9fafb" stroke-width="6"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <text x="282" y="150" font-family="system-ui, -apple-system, Segoe UI, sans-serif"
+        font-size="96" font-weight="800" fill="#e5e7eb" letter-spacing="2">GNOSIS</text>
+  <rect x="284" y="172" width="420" height="4" fill="#2563eb"/>
+  <text x="282" y="220" font-family="system-ui, -apple-system, Segoe UI, sans-serif"
+        font-size="27" fill="#9ca3af">Private, source-grounded knowledge base for Telegram, Discord &amp; Reddit</text>
+</svg>
