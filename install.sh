@@ -30,6 +30,11 @@ fi
 
 [ -f .env ] || cp .env.example .env
 [ -f config/sources.toml ] || cp config/sources.example.toml config/sources.toml
+# Il container web scrive .env/config/sources.toml da dashboard con un utente non privilegiato
+# (uid diverso da quello dell'host): permessi aperti in scrittura, coerente con un host dedicato
+# a uso personale (Oracle Free Tier o simile), non un server condiviso multi-utente.
+chmod 666 .env
+chmod -R a+rwX config
 
 info "Accesso web privato"
 read -rp "Username admin [admin]: " WEB_USER

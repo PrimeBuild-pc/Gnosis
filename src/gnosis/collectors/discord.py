@@ -36,6 +36,7 @@ async def run(
                     source_external_id=str(message.channel.id),
                     external_id=str(message.id),
                     author=str(message.author),
+                    author_id=str(message.author.id),
                     sent_at=message.created_at,
                     text=message.content,
                     url=message.jump_url,

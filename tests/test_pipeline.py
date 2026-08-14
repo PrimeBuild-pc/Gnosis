@@ -1,4 +1,38 @@
-from gnosis.pipeline import chunk_text, content_hash, normalize_text, parse_classifications
+from datetime import UTC, datetime
+
+from gnosis.pipeline import (
+    chunk_text,
+    content_hash,
+    normalize_text,
+    parse_classifications,
+    store_collected,
+)
+from gnosis.types import CollectedMessage
+
+
+class FakeDB:
+    def __init__(self, ignored: bool = False) -> None:
+        self.ignored = ignored
+        self.saved = None
+
+    def is_ignored(self, platform: str, author_id: str) -> bool:
+        return self.ignored
+
+    def save_message(self, source_id, message, content_hash):
+        self.saved = (source_id, message, content_hash)
+        return 42
+
+
+def _message(author_id: str | None) -> CollectedMessage:
+    return CollectedMessage(
+        platform="telegram",
+        source_external_id="1",
+        external_id="10",
+        author="someone",
+        author_id=author_id,
+        sent_at=datetime.now(UTC),
+        text="hello world",
+    )
 
 
 def test_normalize_and_hash_are_stable():
@@ -25,3 +59,23 @@ def test_parse_classifications_rejects_unknown_and_clamps_score():
         {1},
     )
     assert parsed == {1: {"relevance": 1.0, "tags": ["AI"], "kind": "news"}}
+
+
+def test_store_collected_skips_ignored_author():
+    db = FakeDB(ignored=True)
+    result = store_collected(db, {("telegram", "1"): 5}, _message(author_id="99"))
+    assert result is None
+    assert db.saved is None
+
+
+def test_store_collected_saves_when_author_not_ignored():
+    db = FakeDB(ignored=False)
+    result = store_collected(db, {("telegram", "1"): 5}, _message(author_id="99"))
+    assert result == 42
+    assert db.saved is not None
+
+
+def test_store_collected_saves_when_author_id_missing():
+    db = FakeDB(ignored=True)
+    result = store_collected(db, {("telegram", "1"): 5}, _message(author_id=None))
+    assert result == 42

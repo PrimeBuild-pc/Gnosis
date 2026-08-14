@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from typing import Any
 
 from fastembed import TextEmbedding
 from openai import AsyncOpenAI
 
 from .config import Settings
+
+UsageCallback = Callable[[str, str, int, int], None]
 
 
 class LLM:
@@ -19,6 +22,7 @@ class LLM:
             base_url=settings.chat_base_url,
         )
         self.chat_model = settings.chat_model
+        self.on_usage: UsageCallback | None = None
         self.embedding_model = settings.embedding_model
         self.embedding_dimensions = settings.embedding_dimensions
         self._local_embedder: TextEmbedding | None = None
@@ -66,6 +70,10 @@ class LLM:
             return self._check_dimensions(vectors)[0]
         return (await self.embed([text]))[0]
 
+    def _record_usage(self, kind: str, usage: Any) -> None:
+        if self.on_usage is not None and usage is not None:
+            self.on_usage(kind, self.chat_model, usage.prompt_tokens, usage.completion_tokens)
+
     async def json(self, system: str, prompt: str) -> dict[str, Any]:
         response = await self.chat_client.chat.completions.create(
             model=self.chat_model,
@@ -76,6 +84,7 @@ class LLM:
                 {"role": "user", "content": prompt},
             ],
         )
+        self._record_usage("json", response.usage)
         return json.loads(response.choices[0].message.content or "{}")
 
     async def text(self, system: str, prompt: str) -> str:
@@ -87,4 +96,5 @@ class LLM:
                 {"role": "user", "content": prompt},
             ],
         )
+        self._record_usage("text", response.usage)
         return (response.choices[0].message.content or "").strip()

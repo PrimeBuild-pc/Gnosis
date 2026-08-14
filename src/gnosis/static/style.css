@@ -8,8 +8,16 @@ button:hover, button.active { background: #2563eb; }
 .view { display: none; }
 .view.active { display: block; }
 form { display: grid; gap: .7rem; }
-textarea { min-height: 7rem; resize: vertical; padding: .8rem; border-radius: .4rem; border: 1px solid #4b5563; background: #1f2937; color: inherit; }
+textarea, input, select { min-height: unset; resize: vertical; padding: .7rem .8rem; border-radius: .4rem; border: 1px solid #4b5563; background: #1f2937; color: inherit; font: inherit; }
+textarea { min-height: 7rem; }
+label { display: grid; gap: .3rem; }
+label:has(input[type="checkbox"]) { display: flex; flex-direction: row; align-items: center; gap: .5rem; }
 #answer, article, .source { margin-top: 1rem; padding: 1rem; border-radius: .5rem; background: #1f2937; white-space: pre-wrap; }
 a { color: #60a5fa; }
 ul { padding-left: 1.4rem; }
 .error { color: #fca5a5; }
+.hint { color: #9ca3af; font-size: .9rem; }
+h3 { margin-top: 2rem; }
+button.danger { background: #7f1d1d; }
+button.danger:hover { background: #991b1b; }
+.source button { margin-left: .5rem; padding: .3rem .6rem; font-size: .85rem; }

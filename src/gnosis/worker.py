@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from . import telegram_bot
 from .collectors import discord, reddit, telegram
@@ -17,14 +17,16 @@ from .types import CollectedMessage
 log = logging.getLogger(__name__)
 
 
-async def _supervise(name: str, run) -> None:
+async def _supervise(db: Database, name: str, run) -> None:
     while True:
         try:
+            db.report_status(name, "ok")
             await run()
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
             log.exception("Connettore %s terminato; nuovo tentativo tra 30 secondi", name)
+            db.report_status(name, "error", str(error)[:500])
             await asyncio.sleep(30)
 
 
@@ -37,6 +39,7 @@ async def run_worker() -> None:
     db.migrate()
     source_ids = db.upsert_sources(configured_sources)
     llm = LLM(settings)
+    llm.on_usage = db.record_usage
     pipeline = Pipeline(db, llm, settings.relevance_threshold)
     digest = DigestService(db, llm, settings.zoneinfo)
     rag = RAG(db, llm)
@@ -71,23 +74,40 @@ async def run_worker() -> None:
                 log.exception("Errore nella generazione del digest")
             await asyncio.sleep(3600)
 
+    async def retention_loop() -> None:
+        while True:
+            try:
+                raw = db.get_setting("retention_days")
+                if raw:
+                    cutoff = datetime.now(UTC) - timedelta(days=int(raw))
+                    removed = db.prune(cutoff)
+                    if removed:
+                        log.info(
+                            "Retention: eliminati %s messaggi più vecchi di %s giorni", removed, raw
+                        )
+            except Exception:
+                log.exception("Errore nella retention")
+            await asyncio.sleep(3600)
+
     grouped = {
         platform: [source for source in sources if source.platform == platform]
         for platform in ("telegram", "discord", "reddit")
     }
-    tasks = [process_loop, digest_loop]
+    tasks = [("pipeline", process_loop), ("digest", digest_loop), ("retention", retention_loop)]
     if grouped["telegram"] and settings.telegram_api_id and settings.telegram_api_hash:
-        tasks.append(lambda: telegram.run(settings, grouped["telegram"], emit, delete))
+        tasks.append(
+            ("telegram", lambda: telegram.run(settings, grouped["telegram"], emit, delete))
+        )
     if grouped["discord"] and settings.discord_bot_token:
-        tasks.append(lambda: discord.run(settings, grouped["discord"], emit, delete))
+        tasks.append(("discord", lambda: discord.run(settings, grouped["discord"], emit, delete)))
     if grouped["reddit"] and settings.reddit_client_id and settings.reddit_client_secret:
-        tasks.append(lambda: reddit.run(settings, grouped["reddit"], emit))
+        tasks.append(("reddit", lambda: reddit.run(settings, grouped["reddit"], emit)))
     if settings.telegram_bot_token and settings.telegram_api_id and settings.telegram_api_hash:
-        tasks.append(lambda: telegram_bot.run(settings, rag, db))
+        tasks.append(("telegram_bot", lambda: telegram_bot.run(settings, rag, db)))
 
     try:
         async with asyncio.TaskGroup() as group:
-            for index, task in enumerate(tasks):
-                group.create_task(_supervise(str(index), task))
+            for name, task in tasks:
+                group.create_task(_supervise(db, name, task))
     finally:
         db.close()

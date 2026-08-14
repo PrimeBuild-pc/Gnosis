@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -12,7 +12,8 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .config import Settings
+from . import envfile
+from .config import Settings, SourceConfig, load_sources, save_sources
 from .db import Database
 from .digest import DigestService, previous_week
 from .llm import LLM
@@ -20,9 +21,52 @@ from .rag import RAG
 
 security = HTTPBasic(auto_error=False)
 
+_ENV_PATH = Path(".env")
+_CONFIG_KEYS = (
+    "GNOSIS_CHAT_API_KEY",
+    "GNOSIS_CHAT_BASE_URL",
+    "OPENAI_CHAT_MODEL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "GNOSIS_EMBEDDING_PROVIDER",
+    "TELEGRAM_API_ID",
+    "TELEGRAM_API_HASH",
+    "TELEGRAM_BOT_TOKEN",
+    "GNOSIS_TELEGRAM_ALLOWED_USERS",
+    "DISCORD_BOT_TOKEN",
+    "REDDIT_CLIENT_ID",
+    "REDDIT_CLIENT_SECRET",
+)
+_SECRET_HINTS = ("KEY", "TOKEN", "SECRET", "HASH")
+
 
 class Query(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
+
+
+class ConfigUpdate(BaseModel):
+    values: dict[str, str]
+
+
+class SourceInput(BaseModel):
+    platform: str
+    external_id: str = Field(min_length=1)
+    name: str = ""
+    enabled: bool = True
+    topics: list[str] = Field(default_factory=list)
+
+
+class RetentionUpdate(BaseModel):
+    days: int | None = Field(default=None, ge=1)
+
+
+class WipeConfirm(BaseModel):
+    confirm: str
+
+
+class IgnoreAuthorInput(BaseModel):
+    platform: str
+    author_id: str = Field(min_length=1)
 
 
 def create_app() -> FastAPI:
@@ -36,6 +80,7 @@ def create_app() -> FastAPI:
         db.open()
         db.migrate()
         llm = LLM(settings)
+        llm.on_usage = db.record_usage
         app.state.db = db
         app.state.rag = RAG(db, llm)
         app.state.digest = DigestService(db, llm, settings.zoneinfo)
@@ -108,6 +153,96 @@ def create_app() -> FastAPI:
         start, end = previous_week(datetime.now(UTC), settings.zoneinfo)
         digest_id = await request.app.state.digest.generate(start, end)
         return {"id": digest_id, "period_start": start, "period_end": end}
+
+    @app.get("/api/config", dependencies=[Depends(authenticate)])
+    def get_config():
+        current = envfile.read_env(_ENV_PATH)
+        return {
+            key: (
+                envfile.mask(current.get(key, ""))
+                if any(hint in key for hint in _SECRET_HINTS)
+                else current.get(key, "")
+            )
+            for key in _CONFIG_KEYS
+        }
+
+    @app.post("/api/config", dependencies=[Depends(authenticate)])
+    def update_config(update: ConfigUpdate):
+        unknown = set(update.values) - set(_CONFIG_KEYS)
+        if unknown:
+            raise HTTPException(
+                status_code=400, detail=f"Chiavi non consentite: {', '.join(sorted(unknown))}"
+            )
+        envfile.write_env(_ENV_PATH, update.values)
+        return {"saved": list(update.values), "restart_required": True}
+
+    @app.post("/api/sources", dependencies=[Depends(authenticate)])
+    def upsert_source(source: SourceInput, request: Request):
+        if source.platform not in {"telegram", "discord", "reddit"}:
+            raise HTTPException(status_code=400, detail="Piattaforma non valida")
+        existing = load_sources(settings.sources_file)
+        updated = [
+            item
+            for item in existing
+            if (item.platform, item.external_id) != (source.platform, source.external_id)
+        ]
+        updated.append(
+            SourceConfig(
+                platform=source.platform,
+                external_id=source.external_id,
+                name=source.name or source.external_id,
+                enabled=source.enabled,
+                topics=tuple(source.topics),
+            )
+        )
+        save_sources(settings.sources_file, updated)
+        request.app.state.db.upsert_sources(updated)
+        return {"sources": request.app.state.db.list_sources()}
+
+    @app.get("/api/status", dependencies=[Depends(authenticate)])
+    def get_status(request: Request):
+        db = request.app.state.db
+        return {"workers": db.worker_status(), "sources": db.source_activity()}
+
+    @app.get("/api/settings/retention", dependencies=[Depends(authenticate)])
+    def get_retention(request: Request):
+        raw = request.app.state.db.get_setting("retention_days")
+        return {"days": int(raw) if raw else None}
+
+    @app.post("/api/settings/retention", dependencies=[Depends(authenticate)])
+    def set_retention(update: RetentionUpdate, request: Request):
+        request.app.state.db.set_setting(
+            "retention_days", str(update.days) if update.days else None
+        )
+        return {"days": update.days}
+
+    @app.post("/api/wipe", dependencies=[Depends(authenticate)])
+    def wipe(confirm: WipeConfirm, request: Request):
+        if confirm.confirm != "WIPE":
+            raise HTTPException(
+                status_code=400, detail='Conferma richiesta: invia {"confirm": "WIPE"}'
+            )
+        request.app.state.db.wipe_all()
+        return {"wiped": True}
+
+    @app.get("/api/ignored-authors", dependencies=[Depends(authenticate)])
+    def list_ignored(request: Request):
+        return request.app.state.db.list_ignored()
+
+    @app.post("/api/ignored-authors", dependencies=[Depends(authenticate)])
+    def add_ignored(payload: IgnoreAuthorInput, request: Request):
+        request.app.state.db.ignore_author(payload.platform, payload.author_id)
+        return {"ignored": True}
+
+    @app.delete("/api/ignored-authors/{platform}/{author_id}", dependencies=[Depends(authenticate)])
+    def remove_ignored(platform: str, author_id: str, request: Request):
+        request.app.state.db.unignore_author(platform, author_id)
+        return {"ignored": False}
+
+    @app.get("/api/usage", dependencies=[Depends(authenticate)])
+    def usage(request: Request):
+        since = datetime.now(UTC) - timedelta(days=30)
+        return request.app.state.db.usage_summary(since)
 
     app.mount("/", StaticFiles(directory=static_dir), name="web")
     return app

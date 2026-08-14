@@ -143,6 +143,14 @@ If `TELEGRAM_BOT_TOKEN` and `GNOSIS_TELEGRAM_ALLOWED_USERS` are set, the worker 
 
 Only the whitelisted Telegram user IDs can use it; see [platform setup](docs/setup-platforms.md#bot-interattivo-ask-digest).
 
+## 🛠️ Admin dashboard
+
+The web UI has an **Impostazioni** (settings) and a **Stato** (status) tab alongside chat/digest/sources, so day-to-day administration doesn't require shell access to the host:
+
+- **Sorgenti**: add sources or toggle them on/off from the UI. Toggling an existing source takes effect immediately (search/RAG already filter on it); a brand-new platform/source still needs a worker restart to start collecting.
+- **Impostazioni**: edit provider keys/URLs (masked previews, only changed fields are saved), set a retention window (default: forever) or wipe all collected data, and manage a per-platform ignore-list for specific authors. Key/provider changes write to `.env` and need `docker compose restart` to take effect — the dashboard cannot restart its own container (that would require mounting the Docker socket, a privilege escalation this project doesn't take on without it being a deliberate choice).
+- **Stato**: connector health (per collector, reported by the worker's supervision loop), last activity per source, and raw token usage per model over the last 30 days — counts only, no cost estimate, since provider pricing changes too often to hardcode reliably.
+
 ## 🔒 Platform access and privacy
 
 - **Discord:** only an official bot authorized by the server administrators is supported. User tokens and self-bots are explicitly unsupported.

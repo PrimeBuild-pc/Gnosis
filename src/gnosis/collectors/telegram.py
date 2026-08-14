@@ -60,6 +60,7 @@ async def run(
                 text=message.message,
                 url=_link(message.chat_id, getattr(chat, "username", None), message.id),
                 thread_id=str(message.reply_to_msg_id) if message.reply_to_msg_id else None,
+                author_id=str(message.sender_id) if message.sender_id else None,
             )
         )
 

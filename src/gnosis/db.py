@@ -91,11 +91,12 @@ class Database:
             row = connection.execute(
                 """
                 INSERT INTO messages
-                    (source_id, external_id, author, sent_at, text, url, thread_id,
+                    (source_id, external_id, author, author_id, sent_at, text, url, thread_id,
                      content_hash, metadata)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                 ON CONFLICT (source_id, external_id) DO UPDATE SET
                     author = EXCLUDED.author,
+                    author_id = EXCLUDED.author_id,
                     sent_at = EXCLUDED.sent_at,
                     text = EXCLUDED.text,
                     url = EXCLUDED.url,
@@ -117,6 +118,7 @@ class Database:
                     source_id,
                     message.external_id,
                     message.author,
+                    message.author_id,
                     message.sent_at,
                     message.text,
                     message.url,
@@ -301,3 +303,115 @@ class Database:
         with self.connection() as connection:
             result = connection.execute("DELETE FROM messages WHERE sent_at < %s", (before,))
             return result.rowcount
+
+    def wipe_all(self) -> None:
+        with self.connection() as connection:
+            connection.execute("TRUNCATE TABLE messages, chunks, digests RESTART IDENTITY CASCADE")
+
+    def report_status(self, component: str, status: str, detail: str | None = None) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO worker_status (component, status, detail, updated_at)
+                VALUES (%s, %s, %s, now())
+                ON CONFLICT (component) DO UPDATE SET
+                    status = EXCLUDED.status, detail = EXCLUDED.detail, updated_at = now()
+                """,
+                (component, status, detail),
+            )
+
+    def worker_status(self) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            return list(
+                connection.execute("SELECT * FROM worker_status ORDER BY component").fetchall()
+            )
+
+    def source_activity(self) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            return list(
+                connection.execute(
+                    """
+                    SELECT s.platform, s.name, s.enabled,
+                           max(m.processed_at) AS last_processed_at,
+                           count(m.id) FILTER (WHERE m.status = 'pending') AS pending
+                    FROM sources s
+                    LEFT JOIN messages m ON m.source_id = s.id
+                    GROUP BY s.id, s.platform, s.name, s.enabled
+                    ORDER BY s.platform, s.name
+                    """
+                ).fetchall()
+            )
+
+    def is_ignored(self, platform: str, author_id: str) -> bool:
+        with self.connection() as connection:
+            return (
+                connection.execute(
+                    "SELECT 1 FROM ignored_authors WHERE platform = %s AND author_id = %s",
+                    (platform, author_id),
+                ).fetchone()
+                is not None
+            )
+
+    def ignore_author(self, platform: str, author_id: str) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                "INSERT INTO ignored_authors (platform, author_id) VALUES (%s, %s) "
+                "ON CONFLICT DO NOTHING",
+                (platform, author_id),
+            )
+
+    def unignore_author(self, platform: str, author_id: str) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                "DELETE FROM ignored_authors WHERE platform = %s AND author_id = %s",
+                (platform, author_id),
+            )
+
+    def list_ignored(self) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            return list(
+                connection.execute(
+                    "SELECT platform, author_id, created_at FROM ignored_authors "
+                    "ORDER BY created_at DESC"
+                ).fetchall()
+            )
+
+    def get_setting(self, key: str) -> str | None:
+        with self.connection() as connection:
+            row = connection.execute("SELECT value FROM settings WHERE key = %s", (key,)).fetchone()
+            return row["value"] if row else None
+
+    def set_setting(self, key: str, value: str | None) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                "INSERT INTO settings (key, value) VALUES (%s, %s) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+                (key, value),
+            )
+
+    def record_usage(
+        self, kind: str, model: str, prompt_tokens: int, completion_tokens: int
+    ) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                "INSERT INTO api_usage (kind, model, prompt_tokens, completion_tokens) "
+                "VALUES (%s, %s, %s, %s)",
+                (kind, model, prompt_tokens, completion_tokens),
+            )
+
+    def usage_summary(self, since: datetime) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            return list(
+                connection.execute(
+                    """
+                    SELECT kind, model, count(*) AS requests,
+                           sum(prompt_tokens) AS prompt_tokens,
+                           sum(completion_tokens) AS completion_tokens
+                    FROM api_usage
+                    WHERE created_at >= %s
+                    GROUP BY kind, model
+                    ORDER BY kind, model
+                    """,
+                    (since,),
+                ).fetchall()
+            )

@@ -13,6 +13,8 @@
       <button data-view="chat" class="active">Chat</button>
       <button data-view="digests">Digest</button>
       <button data-view="sources">Sorgenti</button>
+      <button data-view="settings">Impostazioni</button>
+      <button data-view="status">Stato</button>
     </nav>
     <section id="chat" class="view active">
       <form id="question-form">
@@ -23,7 +25,78 @@
       <div id="answer" aria-live="polite"></div>
     </section>
     <section id="digests" class="view"><button id="refresh-digests">Aggiorna</button><div id="digest-list"></div></section>
-    <section id="sources" class="view"><button id="refresh-sources">Aggiorna</button><div id="source-list"></div></section>
+
+    <section id="sources" class="view">
+      <button id="refresh-sources">Aggiorna</button>
+      <div id="source-list"></div>
+      <h3>Aggiungi o aggiorna sorgente</h3>
+      <p class="hint">Una sorgente nuova (piattaforma mai abilitata prima) richiede un riavvio del worker per iniziare la raccolta. Abilitare/disabilitare una sorgente già esistente ha effetto immediato sulle risposte.</p>
+      <form id="source-form">
+        <label for="source-platform">Piattaforma</label>
+        <select id="source-platform" required>
+          <option value="telegram">Telegram</option>
+          <option value="discord">Discord</option>
+          <option value="reddit">Reddit</option>
+        </select>
+        <label for="source-id">ID (chat_id / channel_id / subreddit)</label>
+        <input id="source-id" required>
+        <label for="source-name">Nome</label>
+        <input id="source-name">
+        <label><input type="checkbox" id="source-enabled" checked> Abilitata</label>
+        <label for="source-topics">Argomenti (separati da virgola)</label>
+        <input id="source-topics" placeholder="AI, security">
+        <button type="submit">Salva sorgente</button>
+      </form>
+      <div id="source-form-result"></div>
+    </section>
+
+    <section id="settings" class="view">
+      <h3>Provider e chiavi</h3>
+      <p class="hint">I campi mostrano solo un'anteprima mascherata del valore attuale. Lascia vuoto un campo per non modificarlo. Le modifiche richiedono un riavvio (<code>docker compose restart</code>) per avere effetto.</p>
+      <form id="config-form">
+        <div id="config-fields"></div>
+        <button type="submit">Salva configurazione</button>
+      </form>
+      <div id="config-result"></div>
+
+      <h3>Conservazione dati</h3>
+      <form id="retention-form">
+        <label for="retention-days">Elimina messaggi più vecchi di (giorni, vuoto = per sempre)</label>
+        <input id="retention-days" type="number" min="1" placeholder="per sempre">
+        <button type="submit">Salva conservazione</button>
+      </form>
+      <div id="retention-result"></div>
+
+      <h3>Cancella memoria</h3>
+      <p class="hint">Elimina definitivamente tutti i messaggi, i chunk e i digest raccolti. Le sorgenti configurate restano.</p>
+      <button id="wipe-button" class="danger">Cancella tutta la memoria</button>
+      <div id="wipe-result"></div>
+
+      <h3>Utenti ignorati</h3>
+      <div id="ignored-list"></div>
+      <form id="ignore-form">
+        <label for="ignore-platform">Piattaforma</label>
+        <select id="ignore-platform" required>
+          <option value="telegram">Telegram</option>
+          <option value="discord">Discord</option>
+          <option value="reddit">Reddit</option>
+        </select>
+        <label for="ignore-author">ID autore</label>
+        <input id="ignore-author" required>
+        <button type="submit">Ignora utente</button>
+      </form>
+    </section>
+
+    <section id="status" class="view">
+      <button id="refresh-status">Aggiorna</button>
+      <h3>Connettori</h3>
+      <div id="worker-status"></div>
+      <h3>Sorgenti</h3>
+      <div id="source-status"></div>
+      <h3>Utilizzo (ultimi 30 giorni)</h3>
+      <p class="hint">Conteggi token grezzi: nessuna stima di costo, i prezzi variano per provider e modello.</p>
+      <div id="usage-status"></div>
+    </section>
   </main>
   <script src="/app.js" defer></script>
 </body>

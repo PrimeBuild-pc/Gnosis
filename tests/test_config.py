@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from gnosis.config import Settings, load_sources
+from gnosis.config import Settings, SourceConfig, load_sources, save_sources
 
 
 def test_chat_provider_falls_back_to_openai(monkeypatch: pytest.MonkeyPatch):
@@ -61,3 +61,22 @@ def test_empty_allowlist_is_rejected(tmp_path: Path):
     path.write_text("", encoding="utf-8")
     with pytest.raises(ValueError):
         load_sources(path)
+
+
+def test_save_sources_round_trips_through_load_sources(tmp_path: Path):
+    path = tmp_path / "sources.toml"
+    sources = [
+        SourceConfig(
+            platform="telegram",
+            external_id="-100123",
+            name='AI "Community"',
+            enabled=True,
+            topics=("AI", "security"),
+        ),
+        SourceConfig(platform="discord", external_id="456", name="general", enabled=False),
+    ]
+    save_sources(path, sources)
+    loaded = load_sources(path)
+    assert [(s.platform, s.external_id, s.name, s.enabled, s.topics) for s in loaded] == [
+        (s.platform, s.external_id, s.name, s.enabled, s.topics) for s in sources
+    ]

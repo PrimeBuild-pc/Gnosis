@@ -15,6 +15,7 @@ class CollectedMessage:
     text: str
     url: str = ""
     thread_id: str | None = None
+    author_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:

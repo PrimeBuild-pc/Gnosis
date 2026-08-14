@@ -54,11 +54,14 @@ def store_collected(
     source_id = source_ids.get(key)
     if source_id is None or not text:
         return None
+    if message.author_id and db.is_ignored(message.platform, message.author_id):
+        return None
     normalized = CollectedMessage(
         platform=message.platform,
         source_external_id=message.source_external_id,
         external_id=message.external_id,
         author=message.author.strip(),
+        author_id=message.author_id,
         sent_at=message.sent_at,
         text=text,
         url=message.url,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tomllib
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -97,13 +98,15 @@ class Settings:
         return ZoneInfo(self.timezone)
 
 
+_ID_FIELDS = {"telegram": "chat_id", "discord": "channel_id", "reddit": "subreddit"}
+
+
 def load_sources(path: Path) -> list[SourceConfig]:
     if not path.exists():
         raise FileNotFoundError(f"Configurazione sorgenti assente: {path}")
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    id_fields = {"telegram": "chat_id", "discord": "channel_id", "reddit": "subreddit"}
     sources: list[SourceConfig] = []
-    for platform, id_field in id_fields.items():
+    for platform, id_field in _ID_FIELDS.items():
         for item in data.get(platform, []):
             external_id = str(item.get(id_field, "")).strip()
             if not external_id:
@@ -120,3 +123,22 @@ def load_sources(path: Path) -> list[SourceConfig]:
     if not sources:
         raise ValueError("La allowlist delle sorgenti è vuota")
     return sources
+
+
+def _toml_string(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def save_sources(path: Path, sources: Iterable[SourceConfig]) -> None:
+    lines: list[str] = []
+    for source in sources:
+        id_field = _ID_FIELDS[source.platform]
+        lines.append(f"[[{source.platform}]]")
+        lines.append(f"{id_field} = {_toml_string(source.external_id)}")
+        lines.append(f"name = {_toml_string(source.name)}")
+        lines.append(f"enabled = {'true' if source.enabled else 'false'}")
+        topics = ", ".join(_toml_string(topic) for topic in source.topics)
+        lines.append(f"topics = [{topics}]")
+        lines.append("")
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")

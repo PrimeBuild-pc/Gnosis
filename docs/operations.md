@@ -25,11 +25,16 @@ I backup contengono messaggi personali: cifrarli e limitarne l'accesso.
 
 ## Retention
 
+Due modi equivalenti:
+
+- **Dashboard** (tab Impostazioni → Conservazione dati): imposta un numero di giorni oltre il quale i messaggi vengono eliminati automaticamente ogni ora dal worker (di default è vuoto, cioè per sempre). Lo stesso pannello ha un tasto per cancellare subito tutta la memoria raccolta (messaggi, chunk, digest), con conferma esplicita.
+- **CLI**, per un'eliminazione una tantum:
+
 ```bash
 docker compose run --rm worker gnosis prune --before 2025-01-01
 ```
 
-Le cancellazioni ricevute in tempo reale da Telegram e Discord rimuovono messaggi e chunk associati. Reddit non garantisce notifiche di cancellazione retroattive: applicare una retention breve con `prune` e gestire tempestivamente eventuali richieste di rimozione.
+Le cancellazioni ricevute in tempo reale da Telegram e Discord rimuovono messaggi e chunk associati. Reddit non garantisce notifiche di cancellazione retroattive: applicare una retention breve e gestire tempestivamente eventuali richieste di rimozione.
 
 ## Aggiornamento
 

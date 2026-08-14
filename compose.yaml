@@ -27,7 +27,8 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ./config:/app/config:ro
+      - ./config:/app/config
+      - ./.env:/app/.env
 
   worker:
     image: ghcr.io/primebuild-pc/gnosis:latest
