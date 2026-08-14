@@ -102,12 +102,15 @@ Open <http://127.0.0.1:8080> and sign in with `GNOSIS_USERNAME` and `GNOSIS_PASS
 | Variable | Required | Description |
 |---|---:|---|
 | `DATABASE_URL` | Yes | PostgreSQL connection URL |
-| `OPENAI_API_KEY` | Yes | API key used for classification, embeddings, and answers |
-| `OPENAI_CHAT_MODEL` | Yes | Chat model name |
+| `OPENAI_API_KEY` | Yes | API key used for embeddings, and the fallback for chat |
+| `OPENAI_CHAT_MODEL` | Yes | Chat model name (set it to match whichever provider is used for chat) |
 | `OPENAI_EMBEDDING_MODEL` | Yes | Embedding model; output must contain 1,536 dimensions |
+| `GNOSIS_CHAT_API_KEY` / `GNOSIS_CHAT_BASE_URL` | No | Separate OpenAI-compatible provider for chat (classification, RAG, digest). Falls back to `OPENAI_API_KEY`/`OPENAI_BASE_URL`. Lets you point classification/RAG/digest at a free-tier provider (OpenRouter, NVIDIA NIM, Groq, ...) while keeping OpenAI for embeddings |
 | `GNOSIS_USERNAME` | Yes | Private web interface username |
 | `GNOSIS_PASSWORD` | Yes | Private web interface password |
 | `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | If enabled | Telegram client credentials |
+| `TELEGRAM_BOT_TOKEN` | No | BotFather token for the interactive `/ask` and `/digest` Telegram bot |
+| `GNOSIS_TELEGRAM_ALLOWED_USERS` | If bot enabled | Comma-separated Telegram user IDs authorized to use the bot |
 | `DISCORD_BOT_TOKEN` | If enabled | Official Discord bot token |
 | `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | If enabled | Reddit OAuth credentials |
 
@@ -127,6 +130,15 @@ gnosis prune --before 2025-01-01
 ```
 
 Connectors backfill the latest 200 accessible items, then continue through real-time events or polling. Repeated ingestion is safe and does not duplicate platform messages.
+
+## 💬 Telegram bot
+
+If `TELEGRAM_BOT_TOKEN` and `GNOSIS_TELEGRAM_ALLOWED_USERS` are set, the worker also runs a private Telegram bot (via BotFather) alongside the web UI:
+
+- `/ask <question>` — source-grounded answer with `[Mn]` citations and links, same engine as the web chat.
+- `/digest` — the latest saved weekly digest.
+
+Only the whitelisted Telegram user IDs can use it; see [platform setup](docs/setup-platforms.md#bot-interattivo-ask-digest).
 
 ## 🔒 Platform access and privacy
 

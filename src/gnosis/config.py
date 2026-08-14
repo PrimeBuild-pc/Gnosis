@@ -21,11 +21,15 @@ class Settings:
     database_url: str = "postgresql://gnosis:gnosis@localhost:5432/gnosis"
     openai_api_key: str = ""
     openai_base_url: str | None = None
+    chat_api_key: str = ""
+    chat_base_url: str | None = None
     chat_model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-small"
     telegram_api_id: int | None = None
     telegram_api_hash: str = ""
     telegram_session: str = "data/telegram/gnosis"
+    telegram_bot_token: str = ""
+    telegram_allowed_user_ids: tuple[int, ...] = field(default_factory=tuple)
     discord_bot_token: str = ""
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
@@ -43,15 +47,24 @@ class Settings:
     @classmethod
     def from_env(cls) -> Settings:
         api_id = os.getenv("TELEGRAM_API_ID", "").strip()
+        openai_api_key = os.getenv("OPENAI_API_KEY", "")
+        openai_base_url = os.getenv("OPENAI_BASE_URL") or None
+        allowed_users = os.getenv("GNOSIS_TELEGRAM_ALLOWED_USERS", "")
         return cls(
             database_url=os.getenv("DATABASE_URL", cls.database_url),
-            openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-            openai_base_url=os.getenv("OPENAI_BASE_URL") or None,
+            openai_api_key=openai_api_key,
+            openai_base_url=openai_base_url,
+            chat_api_key=os.getenv("GNOSIS_CHAT_API_KEY", "").strip() or openai_api_key,
+            chat_base_url=os.getenv("GNOSIS_CHAT_BASE_URL") or openai_base_url,
             chat_model=os.getenv("OPENAI_CHAT_MODEL", cls.chat_model),
             embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", cls.embedding_model),
             telegram_api_id=int(api_id) if api_id else None,
             telegram_api_hash=os.getenv("TELEGRAM_API_HASH", ""),
             telegram_session=os.getenv("TELEGRAM_SESSION", cls.telegram_session),
+            telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
+            telegram_allowed_user_ids=tuple(
+                int(value) for value in allowed_users.split(",") if value.strip()
+            ),
             discord_bot_token=os.getenv("DISCORD_BOT_TOKEN", ""),
             reddit_client_id=os.getenv("REDDIT_CLIENT_ID", ""),
             reddit_client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),

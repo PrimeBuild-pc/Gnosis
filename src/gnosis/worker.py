@@ -4,12 +4,14 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
+from . import telegram_bot
 from .collectors import discord, reddit, telegram
 from .config import Settings, load_sources
 from .db import Database
 from .digest import DigestService, previous_week
 from .llm import LLM
 from .pipeline import Pipeline, store_collected
+from .rag import RAG
 from .types import CollectedMessage
 
 log = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ async def run_worker() -> None:
     llm = LLM(settings)
     pipeline = Pipeline(db, llm, settings.relevance_threshold)
     digest = DigestService(db, llm, settings.zoneinfo)
+    rag = RAG(db, llm)
 
     def emit(message: CollectedMessage) -> int | None:
         return store_collected(db, source_ids, message)
@@ -79,6 +82,8 @@ async def run_worker() -> None:
         tasks.append(lambda: discord.run(settings, grouped["discord"], emit, delete))
     if grouped["reddit"] and settings.reddit_client_id and settings.reddit_client_secret:
         tasks.append(lambda: reddit.run(settings, grouped["reddit"], emit))
+    if settings.telegram_bot_token and settings.telegram_api_id and settings.telegram_api_hash:
+        tasks.append(lambda: telegram_bot.run(settings, rag, db))
 
     try:
         async with asyncio.TaskGroup() as group:
