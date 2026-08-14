@@ -17,6 +17,7 @@ from .config import Settings, SourceConfig, load_sources, save_sources
 from .db import Database
 from .digest import DigestService, previous_week
 from .llm import LLM
+from .notify import push_digest
 from .rag import RAG
 
 security = HTTPBasic(auto_error=False)
@@ -152,6 +153,9 @@ def create_app() -> FastAPI:
     async def run_digest(request: Request):
         start, end = previous_week(datetime.now(UTC), settings.zoneinfo)
         digest_id = await request.app.state.digest.generate(start, end)
+        if digest_id:
+            markdown = request.app.state.db.list_digests(limit=1)[0]["markdown"]
+            await push_digest(settings, markdown)
         return {"id": digest_id, "period_start": start, "period_end": end}
 
     @app.get("/api/config", dependencies=[Depends(authenticate)])

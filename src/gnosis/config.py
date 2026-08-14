@@ -34,6 +34,9 @@ class Settings:
     telegram_bot_token: str = ""
     telegram_allowed_user_ids: tuple[int, ...] = field(default_factory=tuple)
     discord_bot_token: str = ""
+    discord_allowed_role_ids: tuple[int, ...] = field(default_factory=tuple)
+    digest_telegram_chat_id: str = ""
+    digest_discord_webhook: str = ""
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
     reddit_user_agent: str = "gnosis-personal-kb/0.1"
@@ -53,6 +56,7 @@ class Settings:
         openai_api_key = os.getenv("OPENAI_API_KEY", "")
         openai_base_url = os.getenv("OPENAI_BASE_URL") or None
         allowed_users = os.getenv("GNOSIS_TELEGRAM_ALLOWED_USERS", "")
+        allowed_roles = os.getenv("GNOSIS_DISCORD_ALLOWED_ROLE_IDS", "")
         embedding_provider = os.getenv("GNOSIS_EMBEDDING_PROVIDER", cls.embedding_provider)
         embedding_model = (
             os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
@@ -79,6 +83,11 @@ class Settings:
                 int(value) for value in allowed_users.split(",") if value.strip()
             ),
             discord_bot_token=os.getenv("DISCORD_BOT_TOKEN", ""),
+            discord_allowed_role_ids=tuple(
+                int(value) for value in allowed_roles.split(",") if value.strip()
+            ),
+            digest_telegram_chat_id=os.getenv("GNOSIS_DIGEST_TELEGRAM_CHAT_ID", ""),
+            digest_discord_webhook=os.getenv("GNOSIS_DIGEST_DISCORD_WEBHOOK", ""),
             reddit_client_id=os.getenv("REDDIT_CLIENT_ID", ""),
             reddit_client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
             reddit_user_agent=os.getenv("REDDIT_USER_AGENT", cls.reddit_user_agent),

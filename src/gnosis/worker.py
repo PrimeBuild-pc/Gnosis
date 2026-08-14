@@ -10,6 +10,7 @@ from .config import Settings, load_sources
 from .db import Database
 from .digest import DigestService, previous_week
 from .llm import LLM
+from .notify import push_digest
 from .pipeline import Pipeline, store_collected
 from .rag import RAG
 from .types import CollectedMessage
@@ -70,6 +71,8 @@ async def run_worker() -> None:
                     digest_id = await digest.generate(start, end)
                     if digest_id:
                         log.info("Creato digest %s", digest_id)
+                        markdown = db.list_digests(limit=1)[0]["markdown"]
+                        await push_digest(settings, markdown)
             except Exception:
                 log.exception("Errore nella generazione del digest")
             await asyncio.sleep(3600)
@@ -99,7 +102,9 @@ async def run_worker() -> None:
             ("telegram", lambda: telegram.run(settings, grouped["telegram"], emit, delete))
         )
     if grouped["discord"] and settings.discord_bot_token:
-        tasks.append(("discord", lambda: discord.run(settings, grouped["discord"], emit, delete)))
+        tasks.append(
+            ("discord", lambda: discord.run(settings, grouped["discord"], emit, delete, rag, db))
+        )
     if grouped["reddit"] and settings.reddit_client_id and settings.reddit_client_secret:
         tasks.append(("reddit", lambda: reddit.run(settings, grouped["reddit"], emit)))
     if settings.telegram_bot_token and settings.telegram_api_id and settings.telegram_api_hash:

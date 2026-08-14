@@ -26,10 +26,32 @@ Comandi disponibili: `/ask <domanda>` risponde con citazioni `[Mn]` e link alle 
 
 1. Creare un'applicazione e un bot nel Discord Developer Portal.
 2. Abilitare il privileged intent **Message Content**.
-3. Invitare il bot esclusivamente nei server che lo autorizzano, con permessi di lettura e cronologia sui canali scelti.
-4. Inserire token e channel ID in `.env` e `config/sources.toml`.
+3. Nell'URL di invito, includere sia lo scope `bot` sia lo scope **`applications.commands`** (necessario perché i comandi slash `/ask` e `/digest` compaiano — senza questo scope il bot legge i messaggi ma non offre comandi).
+4. Invitare il bot esclusivamente nei server che lo autorizzano, con permessi di lettura e cronologia sui canali scelti.
+5. Inserire token e channel ID in `.env` e `config/sources.toml`.
 
 Gnosis non accetta token utente e non implementa self-bot.
+
+### Bot interattivo (`/ask`, `/digest`)
+
+A differenza di Telegram, su Discord non serve un bot separato: lo stesso bot usato per la raccolta risponde anche ai comandi, appena `DISCORD_BOT_TOKEN` è impostato.
+
+1. Attivare la modalità sviluppatore in Discord (Impostazioni utente → Avanzate) per poter copiare gli ID.
+2. Tasto destro sul ruolo da autorizzare (nel server, in Impostazioni ruoli) → **Copia ID**.
+3. Inserire uno o più ID in `GNOSIS_DISCORD_ALLOWED_ROLE_IDS`, separati da virgola.
+
+Senza `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` i comandi restano visibili ma rispondono "non configurato": la raccolta messaggi continua a funzionare comunque, non viene bloccata. I comandi possono impiegare fino a un'ora per comparire su Discord la prima volta (propagazione della sincronizzazione globale); dopo il primo avvio è immediata.
+
+Comandi disponibili: `/ask <domanda>` risponde con citazioni `[Mn]` e link alle fonti; `/digest` restituisce l'ultimo digest salvato.
+
+### Digest pubblicato automaticamente
+
+Facoltativo: oltre a poterlo chiedere on-demand, il digest settimanale generato dal worker può essere pubblicato da solo.
+
+- **Telegram**: imposta `GNOSIS_DIGEST_TELEGRAM_CHAT_ID` con l'ID della chat/canale di destinazione (usa `TELEGRAM_BOT_TOKEN`, nessuna configurazione aggiuntiva).
+- **Discord**: crea un webhook nel canale di destinazione (Impostazioni canale → Integrazioni → Webhook → Nuovo webhook, copia l'URL) e incollalo in `GNOSIS_DIGEST_DISCORD_WEBHOOK`.
+
+Le due destinazioni sono indipendenti fra loro e da `GNOSIS_DISCORD_ALLOWED_ROLE_IDS`/`GNOSIS_TELEGRAM_ALLOWED_USERS`.
 
 ## Reddit
 

@@ -114,7 +114,10 @@ Open <http://127.0.0.1:8080> and sign in with `GNOSIS_USERNAME` and `GNOSIS_PASS
 | `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | If enabled | Telegram client credentials |
 | `TELEGRAM_BOT_TOKEN` | No | BotFather token for the interactive `/ask` and `/digest` Telegram bot |
 | `GNOSIS_TELEGRAM_ALLOWED_USERS` | If bot enabled | Comma-separated Telegram user IDs authorized to use the bot |
-| `DISCORD_BOT_TOKEN` | If enabled | Official Discord bot token |
+| `GNOSIS_DIGEST_TELEGRAM_CHAT_ID` | No | Telegram chat to auto-publish the weekly digest to |
+| `DISCORD_BOT_TOKEN` | If enabled | Official Discord bot token (also powers the `/ask` and `/digest` slash commands) |
+| `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` | No | Comma-separated Discord role IDs authorized to use the bot's slash commands |
+| `GNOSIS_DIGEST_DISCORD_WEBHOOK` | No | Discord channel webhook URL to auto-publish the weekly digest to |
 | `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | If enabled | Reddit OAuth credentials |
 
 See [`.env.example`](.env.example) for every available setting and [`config/sources.example.toml`](config/sources.example.toml) for the source allowlist format.
@@ -142,6 +145,17 @@ If `TELEGRAM_BOT_TOKEN` and `GNOSIS_TELEGRAM_ALLOWED_USERS` are set, the worker 
 - `/digest` — the latest saved weekly digest.
 
 Only the whitelisted Telegram user IDs can use it; see [platform setup](docs/setup-platforms.md#bot-interattivo-ask-digest).
+
+## 🎮 Discord bot
+
+Unlike Telegram, ingestion and commands share the same Discord bot — as soon as `DISCORD_BOT_TOKEN` is set, `/ask` and `/digest` slash commands are registered alongside the existing collector:
+
+- `/ask <domanda>` — same source-grounded answer engine as the web chat and the Telegram bot.
+- `/digest` — the latest saved weekly digest.
+
+Only members with a role listed in `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` can use them; without it the commands reply "not configured" but ingestion keeps working. The bot's invite URL needs the `applications.commands` OAuth scope, not just `bot`, or the slash commands won't appear — see [platform setup](docs/setup-platforms.md#bot-interattivo-ask-digest-1).
+
+The weekly digest can also be pushed automatically (instead of only on-demand) to a Telegram chat and/or a Discord channel webhook — see `GNOSIS_DIGEST_TELEGRAM_CHAT_ID` / `GNOSIS_DIGEST_DISCORD_WEBHOOK` above.
 
 ## 🛠️ Admin dashboard
 
