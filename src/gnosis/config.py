@@ -25,7 +25,7 @@ class Settings:
     chat_base_url: str | None = None
     chat_model: str = "gpt-4o-mini"
     embedding_provider: str = "local"
-    embedding_model: str = "intfloat/multilingual-e5-small"
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_dimensions: int = 384
     telegram_api_id: int | None = None
     telegram_api_hash: str = ""

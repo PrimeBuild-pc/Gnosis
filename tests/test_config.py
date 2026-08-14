@@ -34,7 +34,7 @@ def test_embedding_defaults_to_local_no_key_required(monkeypatch: pytest.MonkeyP
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     settings = Settings.from_env()
     assert settings.embedding_provider == "local"
-    assert settings.embedding_model == "intfloat/multilingual-e5-small"
+    assert settings.embedding_model == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     assert settings.embedding_dimensions == 384
 
 
