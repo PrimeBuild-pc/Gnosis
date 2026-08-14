@@ -250,6 +250,85 @@ const loadUsage = async () => {
 
 document.getElementById('refresh-status').addEventListener('click', () => { loadStatus(); loadUsage(); });
 
+const textEl = (tag, text, className) => {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (className) node.className = className;
+  return node;
+};
+
+const loadEntityDetail = async entityId => {
+  const target = document.getElementById('entity-detail');
+  target.className = '';
+  try {
+    const data = await request(`/api/entities/${entityId}`);
+
+    const heading = document.createElement('h3');
+    heading.append(`${data.entity.name} `, textEl('span', `(${data.entity.type})`, 'hint'));
+
+    const relationsHeading = textEl('h4', 'Relazioni');
+    const relationsBody = data.relations.length
+      ? (() => {
+          const list = document.createElement('ul');
+          list.append(...data.relations.map(r =>
+            textEl('li', `${r.source_name} — ${r.relation} — ${r.target_name}`)
+          ));
+          return list;
+        })()
+      : textEl('p', 'Nessuna relazione registrata.', 'hint');
+
+    const mentionsHeading = textEl('h4', 'Menzioni');
+    const mentionsBody = data.mentions.length
+      ? (() => {
+          const list = document.createElement('ul');
+          list.append(...data.mentions.map(m => {
+            const date = new Date(m.sent_at).toLocaleString();
+            const item = document.createElement('li');
+            if (m.url) {
+              const link = document.createElement('a');
+              link.href = m.url;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              link.textContent = `${m.platform}/${m.source_name}`;
+              item.append(link, `, ${m.author}, ${date}`);
+            } else {
+              item.textContent = `${m.platform}/${m.source_name}, ${m.author}, ${date}`;
+            }
+            return item;
+          }));
+          return list;
+        })()
+      : textEl('p', 'Nessuna menzione registrata.', 'hint');
+
+    target.replaceChildren(heading, relationsHeading, relationsBody, mentionsHeading, mentionsBody);
+  } catch (error) { showError(target, error); }
+};
+
+const loadEntities = async (search = '') => {
+  const target = document.getElementById('entity-list');
+  try {
+    const data = await request(`/api/entities?search=${encodeURIComponent(search)}`);
+    if (!data.length) {
+      target.textContent = 'Nessuna entità trovata.';
+      return;
+    }
+    target.replaceChildren(...data.map(entity => {
+      const item = document.createElement('div');
+      item.className = 'source';
+      item.textContent = `${entity.name} (${entity.type}) — ${entity.mentions} menzioni`;
+      item.style.cursor = 'pointer';
+      item.addEventListener('click', () => loadEntityDetail(entity.id));
+      return item;
+    }));
+  } catch (error) { showError(target, error); }
+};
+
+document.getElementById('entity-search-form').addEventListener('submit', event => {
+  event.preventDefault();
+  loadEntities(document.getElementById('entity-search').value.trim());
+});
+
 loadConfig();
 loadRetention();
 loadIgnored();
+loadEntities();

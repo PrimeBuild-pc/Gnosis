@@ -15,6 +15,7 @@
       <button data-view="sources">Sorgenti</button>
       <button data-view="settings">Impostazioni</button>
       <button data-view="status">Stato</button>
+      <button data-view="graph">Grafo</button>
     </nav>
     <section id="chat" class="view active">
       <form id="question-form">
@@ -96,6 +97,16 @@
       <h3>Utilizzo (ultimi 30 giorni)</h3>
       <p class="hint">Conteggi token grezzi: nessuna stima di costo, i prezzi variano per provider e modello.</p>
       <div id="usage-status"></div>
+    </section>
+
+    <section id="graph" class="view">
+      <p class="hint">Entità e relazioni estratte automaticamente dai messaggi rilevanti. Ogni menzione e relazione resta collegata al messaggio da cui è stata estratta.</p>
+      <form id="entity-search-form">
+        <input id="entity-search" placeholder="Cerca entità (es. nome strumento, persona, progetto)">
+        <button type="submit">Cerca</button>
+      </form>
+      <div id="entity-list"></div>
+      <div id="entity-detail"></div>
     </section>
   </main>
   <script src="/app.js" defer></script>

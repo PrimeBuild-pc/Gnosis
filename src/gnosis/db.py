@@ -306,7 +306,9 @@ class Database:
 
     def wipe_all(self) -> None:
         with self.connection() as connection:
-            connection.execute("TRUNCATE TABLE messages, chunks, digests RESTART IDENTITY CASCADE")
+            connection.execute(
+                "TRUNCATE TABLE messages, chunks, digests, entities RESTART IDENTITY CASCADE"
+            )
 
     def report_status(self, component: str, status: str, detail: str | None = None) -> None:
         with self.connection() as connection:
@@ -415,3 +417,86 @@ class Database:
                     (since,),
                 ).fetchall()
             )
+
+    def upsert_entity(self, entity_type: str, name: str) -> int:
+        normalized = name.strip().casefold()
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO entities (type, name, normalized_name)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (type, normalized_name) DO UPDATE SET name = entities.name
+                RETURNING id
+                """,
+                (entity_type, name.strip(), normalized),
+            ).fetchone()
+            return row["id"]
+
+    def link_mention(self, entity_id: int, message_id: int) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                "INSERT INTO entity_mentions (entity_id, message_id) VALUES (%s, %s) "
+                "ON CONFLICT DO NOTHING",
+                (entity_id, message_id),
+            )
+
+    def add_relation(
+        self, source_entity_id: int, target_entity_id: int, relation: str, message_id: int
+    ) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                "INSERT INTO entity_relations "
+                "(source_entity_id, target_entity_id, relation, message_id) "
+                "VALUES (%s, %s, %s, %s)",
+                (source_entity_id, target_entity_id, relation, message_id),
+            )
+
+    def list_entities(self, search: str = "", limit: int = 50) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            return list(
+                connection.execute(
+                    """
+                    SELECT e.id, e.type, e.name, count(DISTINCT em.message_id) AS mentions
+                    FROM entities e
+                    LEFT JOIN entity_mentions em ON em.entity_id = e.id
+                    WHERE %s = '' OR e.name ILIKE '%%' || %s || '%%'
+                    GROUP BY e.id
+                    ORDER BY mentions DESC, e.name
+                    LIMIT %s
+                    """,
+                    (search, search, limit),
+                ).fetchall()
+            )
+
+    def entity_detail(self, entity_id: int) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            entity = connection.execute(
+                "SELECT * FROM entities WHERE id = %s", (entity_id,)
+            ).fetchone()
+            if not entity:
+                return None
+            relations = connection.execute(
+                """
+                SELECT r.id, r.relation,
+                       se.id AS source_id, se.name AS source_name,
+                       te.id AS target_id, te.name AS target_name
+                FROM entity_relations r
+                JOIN entities se ON se.id = r.source_entity_id
+                JOIN entities te ON te.id = r.target_entity_id
+                WHERE r.source_entity_id = %s OR r.target_entity_id = %s
+                """,
+                (entity_id, entity_id),
+            ).fetchall()
+            mentions = connection.execute(
+                """
+                SELECT m.id, m.url, m.sent_at, m.author, s.platform, s.name AS source_name
+                FROM entity_mentions em
+                JOIN messages m ON m.id = em.message_id
+                JOIN sources s ON s.id = m.source_id
+                WHERE em.entity_id = %s
+                ORDER BY m.sent_at DESC
+                LIMIT 50
+                """,
+                (entity_id,),
+            ).fetchall()
+            return {"entity": entity, "relations": list(relations), "mentions": list(mentions)}

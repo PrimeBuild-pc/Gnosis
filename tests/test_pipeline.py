@@ -5,6 +5,7 @@ from gnosis.pipeline import (
     content_hash,
     normalize_text,
     parse_classifications,
+    parse_entities,
     store_collected,
 )
 from gnosis.types import CollectedMessage
@@ -79,3 +80,50 @@ def test_store_collected_saves_when_author_id_missing():
     db = FakeDB(ignored=True)
     result = store_collected(db, {("telegram", "1"): 5}, _message(author_id=None))
     assert result == 42
+
+
+def test_parse_entities_extracts_known_entities_and_relations():
+    entities, relations = parse_entities(
+        {
+            "entities": [
+                {"name": "Claude", "type": "tool"},
+                {"name": "Anthropic", "type": "organization"},
+            ],
+            "relations": [{"source": "Claude", "target": "Anthropic", "relation": "made_by"}],
+        }
+    )
+    assert entities == [("Claude", "tool"), ("Anthropic", "organization")]
+    assert relations == [("Claude", "Anthropic", "made_by")]
+
+
+def test_parse_entities_drops_relations_with_unknown_entities():
+    entities, relations = parse_entities(
+        {
+            "entities": [{"name": "Claude", "type": "tool"}],
+            "relations": [{"source": "Claude", "target": "Ghost", "relation": "made_by"}],
+        }
+    )
+    assert entities == [("Claude", "tool")]
+    assert relations == []
+
+
+def test_parse_entities_drops_self_relations_and_dedupes_entities():
+    entities, relations = parse_entities(
+        {
+            "entities": [
+                {"name": "Claude", "type": "tool"},
+                {"name": "Claude", "type": "tool"},
+            ],
+            "relations": [{"source": "Claude", "target": "Claude", "relation": "self"}],
+        }
+    )
+    assert entities == [("Claude", "tool")]
+    assert relations == []
+
+
+def test_parse_entities_defaults_missing_type_and_ignores_malformed_items():
+    entities, relations = parse_entities(
+        {"entities": [{"name": "Widget"}, {"name": ""}], "relations": []}
+    )
+    assert entities == [("Widget", "concept")]
+    assert relations == []

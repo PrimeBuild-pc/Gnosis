@@ -248,5 +248,16 @@ def create_app() -> FastAPI:
         since = datetime.now(UTC) - timedelta(days=30)
         return request.app.state.db.usage_summary(since)
 
+    @app.get("/api/entities", dependencies=[Depends(authenticate)])
+    def list_entities(request: Request, search: str = ""):
+        return request.app.state.db.list_entities(search=search)
+
+    @app.get("/api/entities/{entity_id}", dependencies=[Depends(authenticate)])
+    def entity_detail(entity_id: int, request: Request):
+        detail = request.app.state.db.entity_detail(entity_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="Entità non trovata")
+        return detail
+
     app.mount("/", StaticFiles(directory=static_dir), name="web")
     return app
