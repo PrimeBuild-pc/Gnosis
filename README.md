@@ -9,6 +9,12 @@
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/self--hosted-no%20cloud%2C%20no%20tracking-2dd4a7?style=for-the-badge" alt="Self-hosted">
+  <img src="https://img.shields.io/badge/privacy-first-2dd4a7?style=for-the-badge" alt="Privacy-first">
+  <img src="https://img.shields.io/badge/cost-zero-2dd4a7?style=for-the-badge" alt="Zero cost">
+</p>
+
 <p align="center"><i>A private, source-grounded knowledge base for Telegram, Discord, and Reddit. Collect authorized community content, filter noise, generate weekly digests, and ask questions with citations back to the original messages.</i></p>
 
 ---
