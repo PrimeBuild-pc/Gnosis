@@ -3,7 +3,7 @@
 Il percorso rapido è in due passi, e non richiede di modificare file a mano:
 
 1. `./install.sh` alla radice del repo installa Docker se manca, chiede password admin e provider chat, e avvia lo stack.
-2. Il resto si fa dalla dashboard: **Impostazioni** mostra una checklist di cosa manca ancora, con il link alla pagina che rilascia ogni credenziale, e **Sorgenti** è dove si aggiungono canali, chat e subreddit da seguire.
+2. Il resto si fa dalla dashboard: **Impostazioni** mostra una checklist di cosa manca, le credenziali divise per sezione e un pulsante `i` accanto a ogni campo che spiega a cosa serve. **Sorgenti** è dove si scelgono canali e chat, da una tendina di quelli che il bot vede davvero.
 
 Questa pagina resta il riferimento dettagliato: cosa significa ogni credenziale, quali permessi servono sulla piattaforma e quali sono i limiti di ciascun connettore.
 
@@ -27,13 +27,23 @@ Facoltativo, oltre al collector: permette di interrogare Gnosis direttamente da 
 
 Comandi disponibili: `/ask <domanda>` risponde con citazioni `[Mn]` e link alle fonti; `/digest` restituisce l'ultimo digest salvato.
 
+## Workspace: tenere separati piu' server
+
+Un workspace raggruppa le sorgenti di uno stesso server. Serve perche' senza, una domanda pesca da tutte le fonti configurate e la risposta mescola server diversi.
+
+1. In **Impostazioni → Workspace**, crea un workspace e assegnagli l'ID del server Discord (tasto destro sul nome del server → Copia ID server, con la modalita' sviluppatore attiva).
+2. Nel tab **Sorgenti**, scegliendo un canale dalla tendina il workspace viene compilato da solo con il nome del server.
+3. Da quel momento `/ask` dentro quel server risponde usando solo i suoi canali, e applica i ruoli autorizzati di quel workspace.
+
+Ruoli autorizzati e webhook del digest sono impostazioni **del workspace**, non globali: due server hanno ruoli diversi e destinazioni diverse. Le variabili `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` e `GNOSIS_DIGEST_DISCORD_WEBHOOK` restano come ripiego per chi non usa i workspace, e accettano un solo webhook.
+
 ## Discord
 
 1. Creare un'applicazione e un bot nel Discord Developer Portal.
 2. Abilitare il privileged intent **Message Content**.
 3. Nell'URL di invito, includere sia lo scope `bot` sia lo scope **`applications.commands`** (necessario perché i comandi slash `/ask` e `/digest` compaiano — senza questo scope il bot legge i messaggi ma non offre comandi).
 4. Invitare il bot esclusivamente nei server che lo autorizzano, con permessi di lettura e cronologia sui canali scelti.
-5. Inserire token e channel ID in `.env` e `config/sources.toml`.
+5. Inserire il token dalla dashboard (**Impostazioni → Discord**) e scegliere i canali dal tab **Sorgenti**: la tendina si popola da sola appena il worker riparte con il token impostato.
 
 Gnosis non accetta token utente e non implementa self-bot.
 
