@@ -121,11 +121,14 @@ async def run_worker() -> None:
         for platform in ("telegram", "discord", "reddit")
     }
     tasks = [("pipeline", process_loop), ("digest", digest_loop), ("retention", retention_loop)]
-    if grouped["telegram"] and settings.telegram_api_id and settings.telegram_api_hash:
+    # I collector partono appena ci sono le credenziali, anche senza sorgenti abilitate:
+    # servono a scoprire i canali disponibili per la tendina della dashboard. Senza questo
+    # non si potrebbe scegliere un canale finche' non se ne e' gia' inserito uno a mano.
+    if settings.telegram_api_id and settings.telegram_api_hash:
         tasks.append(
             ("telegram", lambda: telegram.run(settings, grouped["telegram"], emit, delete, db))
         )
-    if grouped["discord"] and settings.discord_bot_token:
+    if settings.discord_bot_token:
         tasks.append(
             ("discord", lambda: discord.run(settings, grouped["discord"], emit, delete, rag, db))
         )

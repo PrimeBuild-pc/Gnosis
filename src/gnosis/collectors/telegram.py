@@ -70,19 +70,23 @@ async def run(
             )
         )
 
-    @client.on(events.NewMessage(chats=chat_ids))
-    async def on_message(event):
-        await collect(event.message)
+    # Con chat_ids vuoto i filtri di Telethon non restringerebbero nulla: meglio non
+    # registrare affatto gli handler, cosi' un avvio di sola scoperta non ascolta tutto.
+    if chat_ids:
 
-    @client.on(events.MessageEdited(chats=chat_ids))
-    async def on_edit(event):
-        await collect(event.message)
+        @client.on(events.NewMessage(chats=chat_ids))
+        async def on_message(event):
+            await collect(event.message)
 
-    @client.on(events.MessageDeleted(chats=chat_ids))
-    async def on_delete(event):
-        if event.chat_id is not None:
-            for message_id in event.deleted_ids:
-                delete("telegram", str(event.chat_id), str(message_id))
+        @client.on(events.MessageEdited(chats=chat_ids))
+        async def on_edit(event):
+            await collect(event.message)
+
+        @client.on(events.MessageDeleted(chats=chat_ids))
+        async def on_delete(event):
+            if event.chat_id is not None:
+                for message_id in event.deleted_ids:
+                    delete("telegram", str(event.chat_id), str(message_id))
 
     async def publish_available() -> None:
         """Pubblica le chat raggiungibili dall'account per la tendina della dashboard.
