@@ -13,29 +13,48 @@ from .config import Settings
 UsageCallback = Callable[[str, str, int, int], None]
 
 
+class LLMNotConfigured(RuntimeError):
+    """Credenziale mancante, sollevata all'uso e non alla costruzione.
+
+    Costruire LLM non deve fallire: il web deve restare raggiungibile anche senza chiave,
+    perché la dashboard e' proprio il posto dove la chiave si inserisce.
+    """
+
+
 class LLM:
     def __init__(self, settings: Settings) -> None:
-        if not settings.chat_api_key:
-            raise ValueError("Chiave API chat obbligatoria (OPENAI_API_KEY o GNOSIS_CHAT_API_KEY)")
-        self.chat_client = AsyncOpenAI(
-            api_key=settings.chat_api_key,
-            base_url=settings.chat_base_url,
-        )
-        self.chat_model = settings.chat_model
         self.on_usage: UsageCallback | None = None
+        self.chat_model = settings.chat_model
+        self.chat_client: AsyncOpenAI | None = None
+        self.configure_chat(settings)
         self.embedding_model = settings.embedding_model
         self.embedding_dimensions = settings.embedding_dimensions
         self._local_embedder: TextEmbedding | None = None
         self.embedding_client: AsyncOpenAI | None = None
         if settings.embedding_provider == "local":
             self._local_embedder = TextEmbedding(settings.embedding_model)
-        else:
-            if not settings.openai_api_key:
-                raise ValueError("OPENAI_API_KEY obbligatoria (GNOSIS_EMBEDDING_PROVIDER=openai)")
+        elif settings.openai_api_key:
             self.embedding_client = AsyncOpenAI(
                 api_key=settings.openai_api_key,
                 base_url=settings.openai_base_url,
             )
+
+    def configure_chat(self, settings: Settings) -> None:
+        """Applica chiave, endpoint e modello di chat senza ricostruire l'embedder locale."""
+        self.chat_model = settings.chat_model
+        self.chat_client = (
+            AsyncOpenAI(api_key=settings.chat_api_key, base_url=settings.chat_base_url)
+            if settings.chat_api_key
+            else None
+        )
+
+    def _chat(self) -> AsyncOpenAI:
+        if self.chat_client is None:
+            raise LLMNotConfigured(
+                "Chiave API chat non configurata: impostare GNOSIS_CHAT_API_KEY (o "
+                "OPENAI_API_KEY) dal tab Impostazioni."
+            )
+        return self.chat_client
 
     def _check_dimensions(self, vectors: list[list[float]]) -> list[list[float]]:
         if any(len(vector) != self.embedding_dimensions for vector in vectors):
@@ -54,6 +73,10 @@ class LLM:
                 lambda: [vector.tolist() for vector in embedder.embed(texts)]
             )
             return self._check_dimensions(vectors)
+        if self.embedding_client is None:
+            raise LLMNotConfigured(
+                "OPENAI_API_KEY non configurata, obbligatoria con GNOSIS_EMBEDDING_PROVIDER=openai."
+            )
         response = await self.embedding_client.embeddings.create(
             model=self.embedding_model, input=texts
         )
@@ -75,7 +98,7 @@ class LLM:
             self.on_usage(kind, self.chat_model, usage.prompt_tokens, usage.completion_tokens)
 
     async def json(self, system: str, prompt: str) -> dict[str, Any]:
-        response = await self.chat_client.chat.completions.create(
+        response = await self._chat().chat.completions.create(
             model=self.chat_model,
             response_format={"type": "json_object"},
             temperature=0,
@@ -88,7 +111,7 @@ class LLM:
         return json.loads(response.choices[0].message.content or "{}")
 
     async def text(self, system: str, prompt: str) -> str:
-        response = await self.chat_client.chat.completions.create(
+        response = await self._chat().chat.completions.create(
             model=self.chat_model,
             temperature=0,
             messages=[
