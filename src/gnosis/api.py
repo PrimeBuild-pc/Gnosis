@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -7,7 +8,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -16,7 +17,7 @@ from . import envfile
 from .config import Settings, SourceConfig, load_sources, save_sources
 from .db import Database
 from .digest import DigestService, previous_week
-from .llm import LLM
+from .llm import LLM, LLMNotConfigured
 from .notify import push_digest
 from .rag import RAG
 
@@ -39,6 +40,17 @@ _CONFIG_KEYS = (
     "REDDIT_CLIENT_SECRET",
 )
 _SECRET_HINTS = ("KEY", "TOKEN", "SECRET", "HASH")
+# Chiavi applicabili a caldo: riguardano solo il client di chat di questo processo. Le altre
+# toccano l'embedder o i connettori del worker, che vive in un container separato.
+_LIVE_KEYS = frozenset(
+    {
+        "GNOSIS_CHAT_API_KEY",
+        "GNOSIS_CHAT_BASE_URL",
+        "OPENAI_CHAT_MODEL",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+    }
+)
 
 
 class Query(BaseModel):
@@ -83,12 +95,17 @@ def create_app() -> FastAPI:
         llm = LLM(settings)
         llm.on_usage = db.record_usage
         app.state.db = db
+        app.state.llm = llm
         app.state.rag = RAG(db, llm)
         app.state.digest = DigestService(db, llm, settings.zoneinfo)
         yield
         db.close()
 
     app = FastAPI(title="Gnosis", version="0.1.0", lifespan=lifespan)
+
+    @app.exception_handler(LLMNotConfigured)
+    async def llm_not_configured(request: Request, error: LLMNotConfigured) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(error)})
 
     def authenticate(
         credentials: Annotated[HTTPBasicCredentials | None, Depends(security)],
@@ -171,14 +188,21 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/config", dependencies=[Depends(authenticate)])
-    def update_config(update: ConfigUpdate):
+    def update_config(update: ConfigUpdate, request: Request):
+        nonlocal settings
         unknown = set(update.values) - set(_CONFIG_KEYS)
         if unknown:
             raise HTTPException(
                 status_code=400, detail=f"Chiavi non consentite: {', '.join(sorted(unknown))}"
             )
         envfile.write_env(_ENV_PATH, update.values)
-        return {"saved": list(update.values), "restart_required": True}
+        os.environ.update(update.values)
+        settings = Settings.from_env()
+        request.app.state.llm.configure_chat(settings)
+        return {
+            "saved": list(update.values),
+            "restart_required": bool(set(update.values) - _LIVE_KEYS),
+        }
 
     @app.post("/api/sources", dependencies=[Depends(authenticate)])
     def upsert_source(source: SourceInput, request: Request):
