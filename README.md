@@ -62,13 +62,7 @@ Reddit   ─┘                                      │
 
 ## 🚀 Quick start
 
-### Requirements
-
-- Docker with Compose
-- A free API key for chat (embeddings run locally, no key needed) — see [Configuration](#configuration)
-- Credentials for each enabled platform (optional, can be added later)
-
-### Guided install (recommended)
+Three commands on any Linux machine — a VPS, a cloud VM, a home server, or a laptop.
 
 ```bash
 git clone https://github.com/PrimeBuild-pc/Gnosis.git
@@ -76,34 +70,51 @@ cd Gnosis
 ./install.sh
 ```
 
-Walks you through the admin password, a free chat provider (OpenRouter/Groq/NVIDIA NIM/OpenAI), and optional platform credentials, then builds/pulls the image and starts everything. Re-run it any time to reconfigure — it never overwrites values you don't touch.
+That is the whole install. `install.sh` installs Docker and the Compose plugin if they are missing (Debian/Ubuntu), asks for an admin password and a free chat provider, pulls the prebuilt image (amd64 and arm64), initialises the database, and starts the stack. Re-run it any time to reconfigure — it never overwrites values you do not touch.
 
-If Telegram is enabled, run `docker compose run --rm worker gnosis telegram-login` once afterwards to create the session (not automated — it needs an interactive phone/OTP login).
+### Requirements
 
-### Manual install
+- A Linux machine with `git`. Everything else the installer handles.
+- One free chat API key — OpenRouter, Groq, or NVIDIA NIM all have a free tier. Embeddings run locally, so they need no key and cost nothing.
+- Platform credentials only for the platforms you actually want. None are required to start.
+
+### Then configure it from the dashboard
+
+Open <http://127.0.0.1:8080> and sign in with the admin user you just chose.
+
+- **Settings** opens on a configuration checklist: what is ready, what is still missing, which field to fill, and a link straight to the page that issues each credential. Chat keys apply immediately, with no restart.
+- **Sources** is where you add the channels, chats, and subreddits to follow. Nothing is collected until you list it there.
+
+The service binds to `127.0.0.1` and never opens a port to the internet. On a remote server, reach the dashboard through an SSH tunnel from your own computer:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 user@your-server
+```
+
+Then open <http://127.0.0.1:8080> locally. No firewall rule, no domain, no certificate.
+
+If you enable Telegram, one interactive login is needed after the install to create the session:
+
+```bash
+docker compose run --rm worker gnosis telegram-login
+```
 
 <details>
-<summary>Expand for the step-by-step manual setup</summary>
+<summary>Manual install, step by step</summary>
 
 ```bash
 git clone https://github.com/PrimeBuild-pc/Gnosis.git
 cd Gnosis
 cp .env.example .env
 cp config/sources.example.toml config/sources.toml
-```
-
-Edit `.env` and `config/sources.toml` with your credentials and allowlisted source IDs. Both files are excluded from Git.
-
-```bash
-docker compose build
+docker compose pull   # or: docker compose build
 docker compose run --rm web gnosis db-init
-docker compose run --rm worker gnosis telegram-login  # skip if Telegram is disabled
 docker compose up -d
 ```
 
-</details>
+`.env` and `config/sources.toml` are both excluded from Git. Everything in them can also be set from the dashboard afterwards.
 
-Open <http://127.0.0.1:8080> and sign in with `GNOSIS_USERNAME` and `GNOSIS_PASSWORD`.
+</details>
 
 ## Configuration
 
@@ -168,7 +179,7 @@ The weekly digest can also be pushed automatically (instead of only on-demand) t
 The web UI has **Impostazioni** (settings), **Stato** (status), and **Grafo** tabs alongside chat/digest/sources, so day-to-day administration doesn't require shell access to the host:
 
 - **Sorgenti**: add sources or toggle them on/off from the UI. Toggling an existing source takes effect immediately (search/RAG already filter on it); a brand-new platform/source still needs a worker restart to start collecting.
-- **Impostazioni**: edit provider keys/URLs (masked previews, only changed fields are saved), set a retention window (default: forever) or wipe all collected data, and manage a per-platform ignore-list for specific authors. Key/provider changes write to `.env` and need `docker compose restart` to take effect — the dashboard cannot restart its own container (that would require mounting the Docker socket, a privilege escalation this project doesn't take on without it being a deliberate choice).
+- **Impostazioni**: opens on a setup checklist showing what is configured, what is missing, which fields to fill, and a direct link to the page that issues each credential. Below it, edit provider keys/URLs (masked previews, only changed fields are saved), set a retention window (default: forever) or wipe all collected data, and manage a per-platform ignore-list for specific authors. Chat provider keys are applied to the running process immediately. Platform credentials and the embedding provider still need `docker compose restart worker`: they belong to the worker container, and the dashboard deliberately cannot restart containers — that would mean mounting the Docker socket, a privilege escalation this project does not take on by default.
 - **Stato**: connector health (per collector, reported by the worker's supervision loop), last activity per source, and raw token usage per model over the last 30 days — counts only, no cost estimate, since provider pricing changes too often to hardcode reliably.
 - **Grafo**: entities (people, tools, projects, organizations, concepts) and relationships extracted automatically from relevant messages, browsable and searchable. Every entity mention and relation links back to the source message — same "no claim without a citation" principle as chat and digests. It's plain Postgres tables (nodes/edges queried with SQL, no graph database), only for messages that already passed the relevance filter, and it's a standalone browsable feature — not yet wired into `/ask`'s answers.
 
@@ -190,28 +201,29 @@ Known limitations, by design for this iteration:
 
 Read the complete [platform setup guide](docs/setup-platforms.md) before enabling collectors.
 
-## 🖥️ Running on Oracle Cloud (Always Free)
+## 🖥️ Running on a server, VPS, or cloud VM
 
-Gnosis fits comfortably on an ARM Ampere instance (4 OCPU, 24 GB RAM — always free).
+The install is the same everywhere. What changes is only how you reach the dashboard and how you keep it running.
 
-### Prerequisites
+### Sizing
+
+Gnosis runs on a small instance. It has been deployed and tested on an Oracle Cloud Always Free Ampere VM with **1 OCPU and 6 GB of RAM**, which is a quarter of what that free tier allows. Local embeddings are the heaviest part, and they fit comfortably.
+
+The published image is multi-arch, so `x86_64` and `arm64` (Ampere, Graviton, Raspberry Pi 5) all pull the same tag with no rebuild.
+
+### Reaching the dashboard
+
+Pick one. The first needs no configuration at all and is the recommended default.
+
+**SSH tunnel** — nothing is exposed, nothing to configure:
 
 ```bash
-sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
-sudo usermod -aG docker $USER  # log out and back in
+ssh -L 8080:127.0.0.1:8080 user@your-server
 ```
 
-### Deploy
+**Private network** — [Tailscale](https://tailscale.com) or WireGuard if you want it reachable from a phone without opening ports.
 
-```bash
-git clone https://github.com/PrimeBuild-pc/Gnosis.git
-cd Gnosis
-./install.sh
-```
-
-### Security
-
-Bind to localhost and use nginx as a TLS reverse proxy:
+**Public domain with HTTPS** — only if you actually need it. Point a domain at the server, open 443, and put a TLS reverse proxy in front:
 
 ```nginx
 server {
@@ -221,11 +233,13 @@ server {
 }
 ```
 
-### Auto-start on boot
+Never publish port 8080 directly: HTTP Basic authentication over plain HTTP sends the password in the clear.
+
+### Surviving reboots
+
+Every service declares `restart: unless-stopped`, so the stack comes back on its own. Make sure the Docker daemon itself starts at boot:
 
 ```bash
-# Docker Compose auto-restarts with restart: unless-stopped
-# Ensure Docker daemon starts on boot
 sudo systemctl enable docker
 ```
 

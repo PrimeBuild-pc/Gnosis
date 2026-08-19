@@ -21,3 +21,7 @@ h3 { margin-top: 2rem; }
 button.danger { background: #7f1d1d; }
 button.danger:hover { background: #991b1b; }
 .source button { margin-left: .5rem; padding: .3rem .6rem; font-size: .85rem; }
+.setup-step { margin-top: .75rem; padding: .75rem 1rem; border-radius: .5rem; background: #1f2937; border-left: 3px solid #6b7280; }
+.setup-step.ready { border-left-color: #2dd4a7; }
+.setup-step .setup-title { font-weight: 600; }
+.setup-step p { margin: .35rem 0 0; }
