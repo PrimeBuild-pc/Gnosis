@@ -33,6 +33,10 @@ async def _supervise(db: Database, name: str, run) -> None:
 
 async def run_worker() -> None:
     settings = Settings.from_env()
+    # Il worker, a differenza del web, non ha nulla di utile da fare senza chiave: meglio
+    # fallire subito e visibilmente che a ogni messaggio elaborato.
+    if not settings.chat_api_key:
+        raise ValueError("Chiave API chat obbligatoria (OPENAI_API_KEY o GNOSIS_CHAT_API_KEY)")
     configured_sources = load_sources(settings.sources_file)
     sources = [source for source in configured_sources if source.enabled]
     db = Database(settings.database_url)

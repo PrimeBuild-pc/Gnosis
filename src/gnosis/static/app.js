@@ -134,8 +134,10 @@ document.getElementById('config-form').addEventListener('submit', async event =>
     return;
   }
   try {
-    await request('/api/config', {method: 'POST', body: JSON.stringify({values})});
-    result.textContent = 'Configurazione salvata. Riavvia lo stack (docker compose restart) per applicarla.';
+    const saved = await request('/api/config', {method: 'POST', body: JSON.stringify({values})});
+    result.textContent = saved.restart_required
+      ? 'Configurazione salvata. Riavvia lo stack (docker compose restart) per applicarla.'
+      : 'Configurazione salvata e applicata subito.';
     loadConfig();
   } catch (error) { showError(result, error); }
 });
