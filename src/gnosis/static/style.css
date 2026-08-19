@@ -25,3 +25,16 @@ button.danger:hover { background: #991b1b; }
 .setup-step.ready { border-left-color: #2dd4a7; }
 .setup-step .setup-title { font-weight: 600; }
 .setup-step p { margin: .35rem 0 0; }
+header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; justify-content: space-between; }
+.header-controls { display: flex; gap: .75rem; align-items: center; }
+.header-controls select { padding: .3rem .5rem; }
+label.inline { display: flex; align-items: center; gap: .4rem; }
+.scope-note { margin-top: -.5rem; }
+.row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.callout { border-left: 3px solid #6b7280; padding-left: .75rem; }
+.config-section { margin: 1.25rem 0; padding: 1rem; border-radius: .5rem; background: #1f2937; }
+.config-section h4 { margin: 0 0 .25rem; }
+.field { margin-top: .9rem; }
+.field-header { display: flex; align-items: center; gap: .5rem; }
+button.info { width: 1.4rem; height: 1.4rem; padding: 0; border-radius: 50%; font-size: .8rem; line-height: 1; }
+.help { border-left: 2px solid #2dd4a7; padding-left: .6rem; }

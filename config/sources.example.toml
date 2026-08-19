@@ -1,18 +1,24 @@
 # Copiare come config/sources.toml. Usare ID stabili, non nomi visualizzati.
 # Gli esempi qui sotto sono disabilitati apposta: servono da modello, non sono ID reali.
 # Il modo piu' rapido di aggiungere sorgenti vere e' il tab Sorgenti della dashboard.
+#
+# workspace: raggruppa le sorgenti di uno stesso server. Interrogando Gnosis con quel
+# contesto selezionato, le risposte citano solo le sue fonti invece di mescolare tutto.
+# Vuoto o assente = la sorgente resta visibile solo dal contesto globale.
 
 [[telegram]]
 chat_id = "-1001234567890"
 name = "AI Community"
 enabled = false
 topics = ["AI", "security", "software"]
+workspace = "Telegram personale"
 
 [[discord]]
 channel_id = "123456789012345678"
 name = "security"
 enabled = false
 topics = ["security"]
+workspace = "Il mio server"
 
 [[reddit]]
 subreddit = "MachineLearning"

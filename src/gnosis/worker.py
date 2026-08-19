@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from . import telegram_bot
 from .collectors import discord, reddit, telegram
@@ -71,12 +72,31 @@ async def run_worker() -> None:
         while True:
             try:
                 start, end = previous_week(datetime.now(UTC), settings.zoneinfo)
-                if not db.digest_exists(start, end):
-                    digest_id = await digest.generate(start, end)
-                    if digest_id:
-                        log.info("Creato digest %s", digest_id)
-                        markdown = db.list_digests(limit=1)[0]["markdown"]
-                        await push_digest(settings, markdown)
+                # Un digest per workspace, piu' uno globale se esistono sorgenti non
+                # assegnate: senza questo, due server finirebbero nello stesso riassunto.
+                workspaces = db.list_workspaces()
+                targets: list[dict[str, Any] | None] = [*workspaces, None]
+                for workspace in targets:
+                    workspace_id = workspace["id"] if workspace else None
+                    if db.digest_exists(start, end, workspace_id=workspace_id):
+                        continue
+                    digest_id = await digest.generate(start, end, workspace_id=workspace_id)
+                    if not digest_id:
+                        continue
+                    log.info(
+                        "Creato digest %s per %s",
+                        digest_id,
+                        workspace["name"] if workspace else "tutte le fonti",
+                    )
+                    markdown = db.list_digests(limit=1, workspace_id=workspace_id)[0]["markdown"]
+                    await push_digest(
+                        settings,
+                        markdown,
+                        telegram_chat_id=(
+                            workspace["digest_telegram_chat_id"] if workspace else None
+                        ),
+                        discord_webhook=workspace["digest_webhook"] if workspace else None,
+                    )
             except Exception:
                 log.exception("Errore nella generazione del digest")
             await asyncio.sleep(3600)
@@ -103,7 +123,7 @@ async def run_worker() -> None:
     tasks = [("pipeline", process_loop), ("digest", digest_loop), ("retention", retention_loop)]
     if grouped["telegram"] and settings.telegram_api_id and settings.telegram_api_hash:
         tasks.append(
-            ("telegram", lambda: telegram.run(settings, grouped["telegram"], emit, delete))
+            ("telegram", lambda: telegram.run(settings, grouped["telegram"], emit, delete, db))
         )
     if grouped["discord"] and settings.discord_bot_token:
         tasks.append(

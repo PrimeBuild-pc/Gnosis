@@ -23,12 +23,12 @@ class RAG:
         self.db = db
         self.llm = llm
 
-    async def ask(self, question: str) -> dict[str, Any]:
+    async def ask(self, question: str, workspace_id: int | None = None) -> dict[str, Any]:
         question = question.strip()
         if not question:
             raise ValueError("Domanda vuota")
         embedding = await self.llm.embed_query(question)
-        rows = self.db.search(question, embedding)
+        rows = self.db.search(question, embedding, workspace_id=workspace_id)
         if not rows:
             return {
                 "answer": "Non trovo informazioni sufficienti nelle fonti raccolte.",

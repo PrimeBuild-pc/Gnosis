@@ -15,6 +15,9 @@ class SourceConfig:
     name: str
     enabled: bool = True
     topics: tuple[str, ...] = field(default_factory=tuple)
+    # Nome del workspace di appartenenza. Vuoto = nessun workspace: la sorgente resta
+    # interrogabile solo dal contesto globale, che e' il comportamento storico.
+    workspace: str = ""
 
 
 @dataclass(frozen=True)
@@ -127,6 +130,7 @@ def load_sources(path: Path) -> list[SourceConfig]:
                     name=str(item.get("name") or external_id),
                     enabled=bool(item.get("enabled", True)),
                     topics=tuple(map(str, item.get("topics", []))),
+                    workspace=str(item.get("workspace", "")).strip(),
                 )
             )
     if not sources:
@@ -149,5 +153,7 @@ def save_sources(path: Path, sources: Iterable[SourceConfig]) -> None:
         lines.append(f"enabled = {'true' if source.enabled else 'false'}")
         topics = ", ".join(_toml_string(topic) for topic in source.topics)
         lines.append(f"topics = [{topics}]")
+        if source.workspace:
+            lines.append(f"workspace = {_toml_string(source.workspace)}")
         lines.append("")
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")

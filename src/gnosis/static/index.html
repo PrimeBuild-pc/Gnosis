@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,112 +7,191 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header><h1>Gnosis</h1><p>Knowledge base privata con fonti verificabili</p></header>
+  <header>
+    <div class="header-main">
+      <h1>Gnosis</h1>
+      <p data-i18n="app.tagline"></p>
+    </div>
+    <div class="header-controls">
+      <label class="inline">
+        <span data-i18n="workspace.label"></span>
+        <select id="workspace-select"></select>
+      </label>
+      <label class="inline">
+        <span>🌐</span>
+        <select id="language-select"></select>
+      </label>
+    </div>
+  </header>
+  <p class="hint scope-note" data-i18n="workspace.scopeNote"></p>
+
   <main>
     <nav>
-      <button data-view="chat" class="active">Chat</button>
-      <button data-view="digests">Digest</button>
-      <button data-view="sources">Sorgenti</button>
-      <button data-view="settings">Impostazioni</button>
-      <button data-view="status">Stato</button>
-      <button data-view="graph">Grafo</button>
+      <button data-view="chat" class="active" data-i18n="nav.chat"></button>
+      <button data-view="digests" data-i18n="nav.digests"></button>
+      <button data-view="sources" data-i18n="nav.sources"></button>
+      <button data-view="settings" data-i18n="nav.settings"></button>
+      <button data-view="status" data-i18n="nav.status"></button>
+      <button data-view="graph" data-i18n="nav.graph"></button>
     </nav>
+
     <section id="chat" class="view active">
       <form id="question-form">
-        <label for="question">Domanda</label>
-        <textarea id="question" maxlength="4000" required placeholder="Cosa è emerso questa settimana sulla sicurezza?"></textarea>
-        <button type="submit">Cerca nelle fonti</button>
+        <label for="question" data-i18n="chat.question"></label>
+        <textarea id="question" maxlength="4000" required data-i18n-placeholder="chat.placeholder"></textarea>
+        <button type="submit" data-i18n="chat.submit"></button>
       </form>
       <div id="answer" aria-live="polite"></div>
     </section>
-    <section id="digests" class="view"><button id="refresh-digests">Aggiorna</button><div id="digest-list"></div></section>
+
+    <section id="digests" class="view">
+      <div class="row">
+        <button id="refresh-digests" data-i18n="digests.refresh"></button>
+        <button id="run-digest" data-i18n="digests.run"></button>
+      </div>
+      <div id="digest-result"></div>
+      <div id="digest-list"></div>
+    </section>
 
     <section id="sources" class="view">
-      <button id="refresh-sources">Aggiorna</button>
+      <p class="hint" data-i18n="sources.readNote"></p>
+      <p class="hint callout" data-i18n="sources.commandNote"></p>
+      <button id="refresh-sources" data-i18n="sources.refresh"></button>
       <div id="source-list"></div>
-      <h3>Aggiungi o aggiorna sorgente</h3>
-      <p class="hint">Una sorgente nuova (piattaforma mai abilitata prima) richiede un riavvio del worker per iniziare la raccolta. Abilitare/disabilitare una sorgente già esistente ha effetto immediato sulle risposte.</p>
+
+      <h3 data-i18n="sources.addTitle"></h3>
+      <p class="hint" data-i18n="sources.restartNote"></p>
       <form id="source-form">
-        <label for="source-platform">Piattaforma</label>
+        <label for="source-platform" data-i18n="sources.platform"></label>
         <select id="source-platform" required>
-          <option value="telegram">Telegram</option>
           <option value="discord">Discord</option>
+          <option value="telegram">Telegram</option>
           <option value="reddit">Reddit</option>
         </select>
-        <label for="source-id">ID (chat_id / channel_id / subreddit)</label>
+
+        <label for="source-pick" data-i18n="sources.pick"></label>
+        <select id="source-pick"></select>
+        <p class="hint" id="source-pick-hint"></p>
+
+        <label for="source-id" data-i18n="sources.id"></label>
         <input id="source-id" required>
-        <label for="source-name">Nome</label>
+
+        <label for="source-name" data-i18n="sources.name"></label>
         <input id="source-name">
-        <label><input type="checkbox" id="source-enabled" checked> Abilitata</label>
-        <label for="source-topics">Argomenti (separati da virgola)</label>
+
+        <label for="source-workspace" data-i18n="sources.workspace"></label>
+        <input id="source-workspace" list="workspace-names">
+        <datalist id="workspace-names"></datalist>
+
+        <label for="source-topics" data-i18n="sources.topics"></label>
         <input id="source-topics" placeholder="AI, security">
-        <button type="submit">Salva sorgente</button>
+        <p class="hint" data-i18n="sources.topicsHelp"></p>
+
+        <label class="inline"><input type="checkbox" id="source-enabled" checked> <span data-i18n="sources.enabled"></span></label>
+        <button type="submit" data-i18n="sources.save"></button>
       </form>
       <div id="source-form-result"></div>
     </section>
 
     <section id="settings" class="view">
-      <h3>Stato configurazione</h3>
-      <p class="hint">Serve solo il provider chat per iniziare. Le piattaforme sono facoltative e si aggiungono quando vuoi: ognuna richiede le sue credenziali qui sotto e almeno una sorgente nel tab Sorgenti.</p>
+      <h3 data-i18n="settings.setupTitle"></h3>
+      <p class="hint" data-i18n="settings.setupIntro"></p>
       <div id="setup-steps"></div>
 
-      <h3>Provider e chiavi</h3>
-      <p class="hint">I campi mostrano solo un'anteprima mascherata del valore attuale. Lascia vuoto un campo per non modificarlo. Le chiavi del provider chat valgono subito; quelle delle piattaforme richiedono <code>docker compose restart worker</code>.</p>
       <form id="config-form">
-        <div id="config-fields"></div>
-        <button type="submit">Salva configurazione</button>
+        <p class="hint" data-i18n="settings.maskNote"></p>
+        <div id="config-sections"></div>
+        <button type="submit" data-i18n="settings.save"></button>
       </form>
       <div id="config-result"></div>
 
-      <h3>Conservazione dati</h3>
+      <h3 data-i18n="section.workspaces"></h3>
+      <p class="hint" data-i18n="section.workspaces.intro"></p>
+      <div id="workspace-list"></div>
+      <form id="workspace-form">
+        <label for="workspace-name" data-i18n="workspace.name"></label>
+        <input id="workspace-name" required>
+
+        <label for="workspace-platform" data-i18n="workspace.platform"></label>
+        <select id="workspace-platform">
+          <option value="discord">Discord</option>
+          <option value="telegram">Telegram</option>
+          <option value="reddit">Reddit</option>
+          <option value="">—</option>
+        </select>
+
+        <label for="workspace-external" data-i18n="workspace.externalId"></label>
+        <input id="workspace-external">
+        <p class="hint" data-i18n="workspace.externalIdHelp"></p>
+
+        <label for="workspace-roles" data-i18n="workspace.roles"></label>
+        <input id="workspace-roles">
+        <p class="hint" data-i18n="workspace.rolesHelp"></p>
+
+        <label for="workspace-webhook" data-i18n="workspace.webhook"></label>
+        <input id="workspace-webhook">
+        <p class="hint" data-i18n="workspace.webhookHelp"></p>
+
+        <label for="workspace-telegram-chat" data-i18n="workspace.telegramChat"></label>
+        <input id="workspace-telegram-chat">
+        <p class="hint" data-i18n="workspace.telegramChatHelp"></p>
+
+        <button type="submit" data-i18n="workspace.save"></button>
+      </form>
+      <div id="workspace-result"></div>
+
+      <h3 data-i18n="retention.title"></h3>
       <form id="retention-form">
-        <label for="retention-days">Elimina messaggi più vecchi di (giorni, vuoto = per sempre)</label>
-        <input id="retention-days" type="number" min="1" placeholder="per sempre">
-        <button type="submit">Salva conservazione</button>
+        <label for="retention-days" data-i18n="retention.label"></label>
+        <input id="retention-days" type="number" min="1" data-i18n-placeholder="retention.placeholder">
+        <button type="submit" data-i18n="retention.save"></button>
       </form>
       <div id="retention-result"></div>
 
-      <h3>Cancella memoria</h3>
-      <p class="hint">Elimina definitivamente tutti i messaggi, i chunk e i digest raccolti. Le sorgenti configurate restano.</p>
-      <button id="wipe-button" class="danger">Cancella tutta la memoria</button>
+      <h3 data-i18n="wipe.title"></h3>
+      <p class="hint" data-i18n="wipe.note"></p>
+      <button id="wipe-button" class="danger" data-i18n="wipe.button"></button>
       <div id="wipe-result"></div>
 
-      <h3>Utenti ignorati</h3>
+      <h3 data-i18n="ignored.title"></h3>
       <div id="ignored-list"></div>
       <form id="ignore-form">
-        <label for="ignore-platform">Piattaforma</label>
+        <label for="ignore-platform" data-i18n="ignored.platform"></label>
         <select id="ignore-platform" required>
-          <option value="telegram">Telegram</option>
           <option value="discord">Discord</option>
+          <option value="telegram">Telegram</option>
           <option value="reddit">Reddit</option>
         </select>
-        <label for="ignore-author">ID autore</label>
+        <label for="ignore-author" data-i18n="ignored.author"></label>
         <input id="ignore-author" required>
-        <button type="submit">Ignora utente</button>
+        <button type="submit" data-i18n="ignored.add"></button>
       </form>
     </section>
 
     <section id="status" class="view">
-      <button id="refresh-status">Aggiorna</button>
-      <h3>Connettori</h3>
+      <button id="refresh-status" data-i18n="status.refresh"></button>
+      <h3 data-i18n="status.connectors"></h3>
       <div id="worker-status"></div>
-      <h3>Sorgenti</h3>
+      <h3 data-i18n="status.sources"></h3>
       <div id="source-status"></div>
-      <h3>Utilizzo (ultimi 30 giorni)</h3>
-      <p class="hint">Conteggi token grezzi: nessuna stima di costo, i prezzi variano per provider e modello.</p>
+      <h3 data-i18n="status.usage"></h3>
+      <p class="hint" data-i18n="status.usageNote"></p>
       <div id="usage-status"></div>
     </section>
 
     <section id="graph" class="view">
-      <p class="hint">Entità e relazioni estratte automaticamente dai messaggi rilevanti. Ogni menzione e relazione resta collegata al messaggio da cui è stata estratta.</p>
+      <p class="hint" data-i18n="graph.intro"></p>
+      <p class="hint" data-i18n="graph.globalNote"></p>
       <form id="entity-search-form">
-        <input id="entity-search" placeholder="Cerca entità (es. nome strumento, persona, progetto)">
-        <button type="submit">Cerca</button>
+        <input id="entity-search" data-i18n-placeholder="graph.search">
+        <button type="submit" data-i18n="graph.submit"></button>
       </form>
       <div id="entity-list"></div>
       <div id="entity-detail"></div>
     </section>
   </main>
+
+  <script src="/i18n.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>
