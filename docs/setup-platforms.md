@@ -1,6 +1,11 @@
 # Configurazione delle piattaforme
 
-`./install.sh` alla radice del repo guida a voce tutta questa configurazione (password admin, provider chat gratuito, credenziali piattaforme) e avvia lo stack: è il percorso consigliato. Questa pagina resta il riferimento per la configurazione manuale o per aggiungere una piattaforma in un secondo momento.
+Il percorso rapido è in due passi, e non richiede di modificare file a mano:
+
+1. `./install.sh` alla radice del repo installa Docker se manca, chiede password admin e provider chat, e avvia lo stack.
+2. Il resto si fa dalla dashboard: **Impostazioni** mostra una checklist di cosa manca ancora, con il link alla pagina che rilascia ogni credenziale, e **Sorgenti** è dove si aggiungono canali, chat e subreddit da seguire.
+
+Questa pagina resta il riferimento dettagliato: cosa significa ogni credenziale, quali permessi servono sulla piattaforma e quali sono i limiti di ciascun connettore.
 
 ## Telegram
 

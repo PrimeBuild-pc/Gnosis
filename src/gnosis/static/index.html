@@ -52,8 +52,12 @@
     </section>
 
     <section id="settings" class="view">
+      <h3>Stato configurazione</h3>
+      <p class="hint">Serve solo il provider chat per iniziare. Le piattaforme sono facoltative e si aggiungono quando vuoi: ognuna richiede le sue credenziali qui sotto e almeno una sorgente nel tab Sorgenti.</p>
+      <div id="setup-steps"></div>
+
       <h3>Provider e chiavi</h3>
-      <p class="hint">I campi mostrano solo un'anteprima mascherata del valore attuale. Lascia vuoto un campo per non modificarlo. Le modifiche richiedono un riavvio (<code>docker compose restart</code>) per avere effetto.</p>
+      <p class="hint">I campi mostrano solo un'anteprima mascherata del valore attuale. Lascia vuoto un campo per non modificarlo. Le chiavi del provider chat valgono subito; quelle delle piattaforme richiedono <code>docker compose restart worker</code>.</p>
       <form id="config-form">
         <div id="config-fields"></div>
         <button type="submit">Salva configurazione</button>

@@ -101,8 +101,55 @@ const CONFIG_LABELS = {
   TELEGRAM_BOT_TOKEN: 'Token bot Telegram',
   GNOSIS_TELEGRAM_ALLOWED_USERS: 'ID utenti Telegram autorizzati (virgola)',
   DISCORD_BOT_TOKEN: 'Token bot Discord',
+  GNOSIS_DISCORD_ALLOWED_ROLE_IDS: 'ID ruoli Discord autorizzati (virgola)',
   REDDIT_CLIENT_ID: 'Reddit client ID',
   REDDIT_CLIENT_SECRET: 'Reddit client secret',
+  GNOSIS_DIGEST_TELEGRAM_CHAT_ID: 'Chat Telegram per il digest automatico (facoltativo)',
+  GNOSIS_DIGEST_DISCORD_WEBHOOK: 'Webhook Discord per il digest automatico (facoltativo)',
+};
+
+const loadSetup = async () => {
+  const target = document.getElementById('setup-steps');
+  try {
+    const steps = await request('/api/setup');
+    target.replaceChildren(...steps.map(step => {
+      const card = document.createElement('div');
+      card.className = step.ready ? 'setup-step ready' : 'setup-step';
+
+      const title = document.createElement('div');
+      title.className = 'setup-title';
+      title.textContent = `${step.ready ? '✓' : '○'} ${step.label}`;
+      if (step.required) title.textContent += ' (obbligatorio)';
+      card.append(title);
+
+      const state = document.createElement('p');
+      if (!step.ready) {
+        state.textContent = `Da configurare: ${step.fields.join(', ')}`;
+      } else if (step.sources === 0) {
+        state.textContent = 'Credenziali presenti, ma nessuna sorgente attiva: aggiungine una nel tab Sorgenti.';
+        state.className = 'hint';
+      } else if (step.sources) {
+        state.textContent = `Attiva su ${step.sources} sorgent${step.sources === 1 ? 'e' : 'i'}.`;
+        state.className = 'hint';
+      } else {
+        state.textContent = 'Configurato.';
+        state.className = 'hint';
+      }
+      card.append(state);
+
+      const hint = document.createElement('p');
+      hint.className = 'hint';
+      hint.textContent = `${step.hint} `;
+      const link = document.createElement('a');
+      link.href = step.docs;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Apri';
+      hint.append(link);
+      card.append(hint);
+      return card;
+    }));
+  } catch (error) { showError(target, error); }
 };
 
 const loadConfig = async () => {
@@ -139,6 +186,7 @@ document.getElementById('config-form').addEventListener('submit', async event =>
       ? 'Configurazione salvata. Riavvia lo stack (docker compose restart) per applicarla.'
       : 'Configurazione salvata e applicata subito.';
     loadConfig();
+    loadSetup();
   } catch (error) { showError(result, error); }
 });
 
@@ -331,6 +379,7 @@ document.getElementById('entity-search-form').addEventListener('submit', event =
 });
 
 loadConfig();
+loadSetup();
 loadRetention();
 loadIgnored();
 loadEntities();
