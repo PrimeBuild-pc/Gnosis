@@ -36,10 +36,15 @@ _CONFIG_KEYS = (
     "TELEGRAM_BOT_TOKEN",
     "GNOSIS_TELEGRAM_ALLOWED_USERS",
     "DISCORD_BOT_TOKEN",
+    "GNOSIS_DISCORD_ALLOWED_ROLE_IDS",
     "REDDIT_CLIENT_ID",
     "REDDIT_CLIENT_SECRET",
+    "GNOSIS_DIGEST_TELEGRAM_CHAT_ID",
+    "GNOSIS_DIGEST_DISCORD_WEBHOOK",
 )
-_SECRET_HINTS = ("KEY", "TOKEN", "SECRET", "HASH")
+# WEBHOOK: l'URL di un webhook Discord è a tutti gli effetti una credenziale, chi lo ha può
+# scrivere nel canale.
+_SECRET_HINTS = ("KEY", "TOKEN", "SECRET", "HASH", "WEBHOOK")
 # Chiavi applicabili a caldo: riguardano solo il client di chat di questo processo. Le altre
 # toccano l'embedder o i connettori del worker, che vive in un container separato.
 _LIVE_KEYS = frozenset(
@@ -174,6 +179,61 @@ def create_app() -> FastAPI:
             markdown = request.app.state.db.list_digests(limit=1)[0]["markdown"]
             await push_digest(settings, markdown)
         return {"id": digest_id, "period_start": start, "period_end": end}
+
+    @app.get("/api/setup", dependencies=[Depends(authenticate)])
+    def setup_state(request: Request):
+        """Cosa manca ancora, e dove prendere la credenziale che manca."""
+        active: dict[str, int] = {}
+        for row in request.app.state.db.list_sources():
+            if row["enabled"]:
+                active[row["platform"]] = active.get(row["platform"], 0) + 1
+        return [
+            {
+                "key": "chat",
+                "label": "Provider chat",
+                "required": True,
+                "ready": bool(settings.chat_api_key),
+                "sources": None,
+                "hint": "Una chiave compatibile OpenAI. Gratis su OpenRouter (modelli con "
+                "suffisso :free), Groq o NVIDIA NIM. Gli embedding restano locali e non "
+                "richiedono nulla.",
+                "docs": "https://openrouter.ai/keys",
+                "fields": ["GNOSIS_CHAT_API_KEY", "GNOSIS_CHAT_BASE_URL", "OPENAI_CHAT_MODEL"],
+            },
+            {
+                "key": "telegram",
+                "label": "Telegram",
+                "required": False,
+                "ready": bool(settings.telegram_api_id and settings.telegram_api_hash),
+                "sources": active.get("telegram", 0),
+                "hint": "api_id e api_hash del tuo account. Dopo averli salvati serve un login "
+                "una tantum: docker compose run --rm worker gnosis telegram-login",
+                "docs": "https://my.telegram.org",
+                "fields": ["TELEGRAM_API_ID", "TELEGRAM_API_HASH"],
+            },
+            {
+                "key": "discord",
+                "label": "Discord",
+                "required": False,
+                "ready": bool(settings.discord_bot_token),
+                "sources": active.get("discord", 0),
+                "hint": "Developer Portal, applicazione con bot: abilita l'intent Message "
+                "Content e invita il bot con gli scope bot e applications.commands.",
+                "docs": "https://discord.com/developers/applications",
+                "fields": ["DISCORD_BOT_TOKEN"],
+            },
+            {
+                "key": "reddit",
+                "label": "Reddit",
+                "required": False,
+                "ready": bool(settings.reddit_client_id and settings.reddit_client_secret),
+                "sources": active.get("reddit", 0),
+                "hint": "Crea una app di tipo script: client ID e secret stanno subito sotto "
+                "il nome della app.",
+                "docs": "https://www.reddit.com/prefs/apps",
+                "fields": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
+            },
+        ]
 
     @app.get("/api/config", dependencies=[Depends(authenticate)])
     def get_config():

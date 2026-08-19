@@ -19,13 +19,40 @@ set_env() {
   ' .env > .env.tmp && mv .env.tmp .env
 }
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "Docker non trovato. Installa Docker prima di continuare: https://docs.docker.com/get-docker/" >&2
+SUDO=""; [ "$(id -u)" -eq 0 ] || SUDO="sudo"
+DC="docker compose"
+
+install_docker() {
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "Docker non trovato e distribuzione non basata su apt. Installalo a mano e rilancia:" >&2
+    echo "  https://docs.docker.com/engine/install/" >&2
+    exit 1
+  fi
+  info "Docker non trovato, lo installo (serve sudo)"
+  # DPkg::Lock::Timeout: su una VM appena creata unattended-upgrades tiene il lock di apt per
+  # qualche minuto, senza attesa l'installer fallirebbe proprio al primo avvio.
+  $SUDO apt-get -o DPkg::Lock::Timeout=600 update -qq
+  $SUDO DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y -qq     docker.io docker-compose-v2
+  # set -e: entrambi possono fallire legittimamente (host senza systemd, oppure gia' root),
+  # e nessuno dei due deve interrompere l'installazione.
+  $SUDO systemctl enable --now docker >/dev/null 2>&1 ||
+    warn "Servizio docker non avviato da systemd: avvialo a mano se non parte."
+  if [ -n "$SUDO" ]; then
+    $SUDO usermod -aG docker "$USER"
+  fi
+  ok "Docker installato"
+}
+
+command -v docker >/dev/null 2>&1 || install_docker
+if ! docker compose version >/dev/null 2>&1; then
+  echo "Plugin Docker Compose non trovato ('docker compose'). Installa docker-compose-v2." >&2
   exit 1
 fi
-if ! docker compose version >/dev/null 2>&1; then
-  echo "Docker Compose plugin non trovato ('docker compose')." >&2
-  exit 1
+# Subito dopo usermod il gruppo docker non è ancora attivo in questa shell: si applica al
+# prossimo login, quindi per adesso si passa da sudo.
+if ! docker info >/dev/null 2>&1; then
+  DC="$SUDO docker compose"
+  warn "Gruppo docker non ancora attivo in questa sessione: usa 'sudo docker compose' finché non rifai il login."
 fi
 
 [ -f .env ] || cp .env.example .env
@@ -81,7 +108,7 @@ if [[ "${ENABLE_TG:-}" =~ ^[Yy]$ ]]; then
   read -rp "TELEGRAM_API_HASH: " TG_HASH
   set_env TELEGRAM_API_ID "$TG_ID"
   set_env TELEGRAM_API_HASH "$TG_HASH"
-  warn "Dopo l'avvio esegui: docker compose run --rm worker gnosis telegram-login"
+  warn "Dopo l'avvio esegui: $DC run --rm worker gnosis telegram-login"
 fi
 read -rp "Abilitare Discord? [y/N]: " ENABLE_DC
 if [[ "${ENABLE_DC:-}" =~ ^[Yy]$ ]]; then
@@ -98,16 +125,26 @@ fi
 warn "Aggiungi le fonti abilitate (chat/canali/subreddit) in config/sources.toml prima di avviare."
 
 info "Avvio Gnosis"
-if docker compose pull >/dev/null 2>&1; then
+if $DC pull >/dev/null 2>&1; then
   ok "Immagine pre-costruita scaricata"
 else
   info "Immagine pre-costruita non disponibile, compilo da sorgente (qualche minuto)..."
-  docker compose build
+  $DC build
 fi
-docker compose run --rm web gnosis db-init
-docker compose up -d
+$DC run --rm web gnosis db-init
+$DC up -d
 
 PORT=$(awk -F= '$1=="GNOSIS_PORT"{print $2}' .env)
 HOST=$(awk -F= '$1=="GNOSIS_HOST"{print $2}' .env)
-ok "Gnosis è avviato su http://${HOST:-127.0.0.1}:${PORT:-8080}"
-echo "Username: $WEB_USER"
+PORT=${PORT:-8080}
+echo
+ok "Gnosis è avviato. Username: $WEB_USER"
+echo
+echo "Apri la dashboard su http://${HOST:-127.0.0.1}:${PORT}"
+echo "Su una macchina remota (VPS, VM, server) la porta resta chiusa verso Internet di"
+echo "proposito: raggiungila con un tunnel SSH dal tuo computer, senza aprire nulla."
+echo
+echo "  ssh -L ${PORT}:127.0.0.1:${PORT} $(id -un)@<ip-del-server>"
+echo
+echo "Il resto (chiavi delle piattaforme, canali da seguire, conservazione dati) si configura"
+echo "dalla dashboard: tab Impostazioni per le credenziali, tab Sorgenti per i canali."

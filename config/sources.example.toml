@@ -1,19 +1,21 @@
 # Copiare come config/sources.toml. Usare ID stabili, non nomi visualizzati.
+# Gli esempi qui sotto sono disabilitati apposta: servono da modello, non sono ID reali.
+# Il modo piu' rapido di aggiungere sorgenti vere e' il tab Sorgenti della dashboard.
 
 [[telegram]]
 chat_id = "-1001234567890"
 name = "AI Community"
-enabled = true
+enabled = false
 topics = ["AI", "security", "software"]
 
 [[discord]]
 channel_id = "123456789012345678"
 name = "security"
-enabled = true
+enabled = false
 topics = ["security"]
 
 [[reddit]]
 subreddit = "MachineLearning"
 name = "r/MachineLearning"
-enabled = true
+enabled = false
 topics = ["AI", "research"]
