@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="docs/assets/in-development.svg" alt="in development..." width="420">
+</p>
+
+<p align="center">
   <img src="docs/assets/banner.svg" alt="Gnosis" width="100%">
 </p>
 
