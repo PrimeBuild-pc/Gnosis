@@ -3,195 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gnosis</title>
+  <title>Gnosis — Prime Build</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header>
-    <div class="header-main">
-      <h1>Gnosis</h1>
-      <p data-i18n="app.tagline"></p>
+  <!-- Guscio applicativo: barra dei bot e delle sezioni a sinistra, contesto (server) in
+       alto, e un solo contenitore in cui il modulo attivo si disegna. Nessun contenuto
+       specifico di Gnosis vive qui dentro: lo iniettano i moduli. -->
+  <div class="app">
+    <div class="brand">
+      <span class="brand-mark" id="brand-mark">🧠</span>
+      <span class="brand-name" id="brand-name">Gnosis</span>
     </div>
-    <div class="header-controls">
-      <label class="inline">
+
+    <div class="topbar">
+      <div class="server-picker">
         <span data-i18n="workspace.label"></span>
         <select id="workspace-select"></select>
-      </label>
-      <label class="inline">
-        <span>🌐</span>
-        <select id="language-select"></select>
-      </label>
-    </div>
-  </header>
-  <p class="hint scope-note" data-i18n="workspace.scopeNote"></p>
-
-  <main>
-    <nav>
-      <button data-view="chat" class="active" data-i18n="nav.chat"></button>
-      <button data-view="digests" data-i18n="nav.digests"></button>
-      <button data-view="sources" data-i18n="nav.sources"></button>
-      <button data-view="settings" data-i18n="nav.settings"></button>
-      <button data-view="status" data-i18n="nav.status"></button>
-      <button data-view="graph" data-i18n="nav.graph"></button>
-    </nav>
-
-    <section id="chat" class="view active">
-      <form id="question-form">
-        <label for="question" data-i18n="chat.question"></label>
-        <textarea id="question" maxlength="4000" required data-i18n-placeholder="chat.placeholder"></textarea>
-        <button type="submit" data-i18n="chat.submit"></button>
-      </form>
-      <div id="answer" aria-live="polite"></div>
-    </section>
-
-    <section id="digests" class="view">
-      <div class="row">
-        <button id="refresh-digests" data-i18n="digests.refresh"></button>
-        <button id="run-digest" data-i18n="digests.run"></button>
       </div>
-      <div id="digest-result"></div>
-      <div id="digest-list"></div>
-    </section>
+      <span class="topbar-spacer"></span>
+      <select id="language-select" aria-label="Language"></select>
+    </div>
 
-    <section id="sources" class="view">
-      <p class="hint" data-i18n="sources.readNote"></p>
-      <p class="hint callout" data-i18n="sources.commandNote"></p>
-      <button id="refresh-sources" data-i18n="sources.refresh"></button>
-      <div id="source-list"></div>
+    <nav class="rail" id="rail"></nav>
 
-      <h3 data-i18n="sources.addTitle"></h3>
-      <p class="hint" data-i18n="sources.restartNote"></p>
-      <form id="source-form">
-        <label for="source-platform" data-i18n="sources.platform"></label>
-        <select id="source-platform" required>
-          <option value="discord">Discord</option>
-          <option value="telegram">Telegram</option>
-          <option value="reddit">Reddit</option>
-        </select>
-
-        <label for="source-pick" data-i18n="sources.pick"></label>
-        <select id="source-pick"></select>
-        <p class="hint" id="source-pick-hint"></p>
-
-        <label for="source-id" data-i18n="sources.id"></label>
-        <input id="source-id" required>
-
-        <label for="source-name" data-i18n="sources.name"></label>
-        <input id="source-name">
-
-        <label for="source-workspace" data-i18n="sources.workspace"></label>
-        <input id="source-workspace" list="workspace-names">
-        <datalist id="workspace-names"></datalist>
-
-        <label for="source-topics" data-i18n="sources.topics"></label>
-        <input id="source-topics" placeholder="AI, security">
-        <p class="hint" data-i18n="sources.topicsHelp"></p>
-
-        <label class="inline"><input type="checkbox" id="source-enabled" checked> <span data-i18n="sources.enabled"></span></label>
-        <button type="submit" data-i18n="sources.save"></button>
-      </form>
-      <div id="source-form-result"></div>
-    </section>
-
-    <section id="settings" class="view">
-      <h3 data-i18n="settings.setupTitle"></h3>
-      <p class="hint" data-i18n="settings.setupIntro"></p>
-      <div id="setup-steps"></div>
-
-      <form id="config-form">
-        <p class="hint" data-i18n="settings.maskNote"></p>
-        <div id="config-sections"></div>
-        <button type="submit" data-i18n="settings.save"></button>
-      </form>
-      <div id="config-result"></div>
-
-      <h3 data-i18n="section.workspaces"></h3>
-      <p class="hint" data-i18n="section.workspaces.intro"></p>
-      <div id="workspace-list"></div>
-      <form id="workspace-form">
-        <label for="workspace-name" data-i18n="workspace.name"></label>
-        <input id="workspace-name" required>
-
-        <label for="workspace-platform" data-i18n="workspace.platform"></label>
-        <select id="workspace-platform">
-          <option value="discord">Discord</option>
-          <option value="telegram">Telegram</option>
-          <option value="reddit">Reddit</option>
-          <option value="">—</option>
-        </select>
-
-        <label for="workspace-external" data-i18n="workspace.externalId"></label>
-        <input id="workspace-external">
-        <p class="hint" data-i18n="workspace.externalIdHelp"></p>
-
-        <label for="workspace-roles" data-i18n="workspace.roles"></label>
-        <input id="workspace-roles">
-        <p class="hint" data-i18n="workspace.rolesHelp"></p>
-
-        <label for="workspace-webhook" data-i18n="workspace.webhook"></label>
-        <input id="workspace-webhook">
-        <p class="hint" data-i18n="workspace.webhookHelp"></p>
-
-        <label for="workspace-telegram-chat" data-i18n="workspace.telegramChat"></label>
-        <input id="workspace-telegram-chat">
-        <p class="hint" data-i18n="workspace.telegramChatHelp"></p>
-
-        <button type="submit" data-i18n="workspace.save"></button>
-      </form>
-      <div id="workspace-result"></div>
-
-      <h3 data-i18n="retention.title"></h3>
-      <form id="retention-form">
-        <label for="retention-days" data-i18n="retention.label"></label>
-        <input id="retention-days" type="number" min="1" data-i18n-placeholder="retention.placeholder">
-        <button type="submit" data-i18n="retention.save"></button>
-      </form>
-      <div id="retention-result"></div>
-
-      <h3 data-i18n="wipe.title"></h3>
-      <p class="hint" data-i18n="wipe.note"></p>
-      <button id="wipe-button" class="danger" data-i18n="wipe.button"></button>
-      <div id="wipe-result"></div>
-
-      <h3 data-i18n="ignored.title"></h3>
-      <div id="ignored-list"></div>
-      <form id="ignore-form">
-        <label for="ignore-platform" data-i18n="ignored.platform"></label>
-        <select id="ignore-platform" required>
-          <option value="discord">Discord</option>
-          <option value="telegram">Telegram</option>
-          <option value="reddit">Reddit</option>
-        </select>
-        <label for="ignore-author" data-i18n="ignored.author"></label>
-        <input id="ignore-author" required>
-        <button type="submit" data-i18n="ignored.add"></button>
-      </form>
-    </section>
-
-    <section id="status" class="view">
-      <button id="refresh-status" data-i18n="status.refresh"></button>
-      <h3 data-i18n="status.connectors"></h3>
-      <div id="worker-status"></div>
-      <h3 data-i18n="status.sources"></h3>
-      <div id="source-status"></div>
-      <h3 data-i18n="status.usage"></h3>
-      <p class="hint" data-i18n="status.usageNote"></p>
-      <div id="usage-status"></div>
-    </section>
-
-    <section id="graph" class="view">
-      <p class="hint" data-i18n="graph.intro"></p>
-      <p class="hint" data-i18n="graph.globalNote"></p>
-      <form id="entity-search-form">
-        <input id="entity-search" data-i18n-placeholder="graph.search">
-        <button type="submit" data-i18n="graph.submit"></button>
-      </form>
-      <div id="entity-list"></div>
-      <div id="entity-detail"></div>
-    </section>
-  </main>
+    <main class="main">
+      <div class="module" id="module"></div>
+    </main>
+  </div>
 
   <script src="/i18n.js" defer></script>
-  <script src="/app.js" defer></script>
+  <script src="/ui.js" defer></script>
+  <script src="/modules.js" defer></script>
+  <script src="/shell.js" defer></script>
 </body>
 </html>

@@ -194,3 +194,25 @@ def test_unknown_key_rejected(client):
         "/api/config", auth=AUTH, json={"values": {"GNOSIS_PASSWORD": "scalata"}}
     )
     assert response.status_code == 400
+
+
+def test_bots_lists_the_catalog_with_current_flagged(client):
+    """Senza GNOSIS_BOTS, solo Gnosis risulta installato: gli altri restano grigi."""
+    test_client, _ = client
+    bots = {bot["id"]: bot for bot in test_client.get("/api/bots", auth=AUTH).json()}
+    assert set(bots) == {"gnosis", "doorman", "dview"}
+    assert bots["gnosis"]["current"] is True
+    assert bots["gnosis"]["installed"] is True
+    assert bots["doorman"]["installed"] is False
+    assert bots["doorman"]["repo"].endswith("/Doorman")
+    assert bots["doorman"]["install"]
+
+
+def test_unreachable_bot_stays_not_installed(client, monkeypatch: pytest.MonkeyPatch):
+    """Un indirizzo configurato ma spento non deve apparire come installato."""
+    test_client, _ = client
+    monkeypatch.setattr("gnosis.api._bot_reachable", lambda url: False)
+    monkeypatch.setenv("GNOSIS_BOTS", "doorman=http://127.0.0.1:59999")
+    test_client.post("/api/config", auth=AUTH, json={"values": {"OPENAI_CHAT_MODEL": "m"}})
+    bots = {bot["id"]: bot for bot in test_client.get("/api/bots", auth=AUTH).json()}
+    assert bots["doorman"]["installed"] is False

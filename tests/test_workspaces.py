@@ -86,3 +86,15 @@ def test_global_digest_still_uses_env_destination(monkeypatch: pytest.MonkeyPatc
     settings = Settings(digest_discord_webhook="https://discord.com/api/webhooks/globale")
     asyncio.run(push_digest(settings, "hello", discord_webhook=None))
     assert calls == ["https://discord.com/api/webhooks/globale"]
+
+
+def test_bots_env_parsing():
+    from gnosis.config import _parse_bots
+
+    assert _parse_bots("doorman=http://a:3000, dview=http://b:3001/") == (
+        ("doorman", "http://a:3000"),
+        ("dview", "http://b:3001"),
+    )
+    # Voci senza indirizzo vengono ignorate invece di produrre un bot con url vuoto.
+    assert _parse_bots("doorman=,=http://x,") == ()
+    assert _parse_bots("") == ()

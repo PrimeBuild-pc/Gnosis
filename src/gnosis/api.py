@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -56,6 +58,57 @@ _LIVE_KEYS = frozenset(
         "OPENAI_BASE_URL",
     }
 )
+
+
+# I tre bot Prime Build. La dashboard e' la stessa per tutti: cambia solo quale e' quello
+# corrente e quali degli altri risultano raggiungibili.
+_BOT_CATALOG = {
+    "gnosis": {
+        "name": "Gnosis",
+        "icon": "\N{BRAIN}",
+        "repo": "https://github.com/PrimeBuild-pc/Gnosis",
+        "install": (
+            "git clone https://github.com/PrimeBuild-pc/Gnosis.git && cd Gnosis && ./install.sh"
+        ),
+    },
+    "doorman": {
+        "name": "Doorman",
+        "icon": "\N{DOOR}",
+        "repo": "https://github.com/PrimeBuild-pc/Doorman",
+        "install": (
+            "git clone https://github.com/PrimeBuild-pc/Doorman.git && cd Doorman && ./install.sh"
+        ),
+    },
+    "dview": {
+        "name": "D-View",
+        "icon": "\N{CLOSED LOCK WITH KEY}",
+        "repo": "https://github.com/PrimeBuild-pc/D-View",
+        "install": (
+            "git clone https://github.com/PrimeBuild-pc/D-View.git && cd D-View "
+            "&& pnpm install && docker compose up -d"
+        ),
+    },
+}
+_CURRENT_BOT = "gnosis"
+_BOT_PROBE_TTL = 30.0
+_bot_probe_cache: dict[str, tuple[float, bool]] = {}
+
+
+def _bot_reachable(url: str) -> bool:
+    """Una richiesta breve all'indirizzo dichiarato. Qualsiasi risposta HTTP basta: serve
+    sapere se c'e' qualcosa in ascolto, non interrogarne l'API."""
+    cached = _bot_probe_cache.get(url)
+    now = time.monotonic()
+    if cached and now - cached[0] < _BOT_PROBE_TTL:
+        return cached[1]
+    try:
+        with httpx.Client(timeout=2.0, follow_redirects=True) as client:
+            client.get(url)
+        alive = True
+    except Exception:  # noqa: BLE001 - qualsiasi errore di rete significa non raggiungibile
+        alive = False
+    _bot_probe_cache[url] = (now, alive)
+    return alive
 
 
 def _is_secret(key: str) -> bool:
@@ -156,6 +209,33 @@ def create_app() -> FastAPI:
     @app.get("/api/stats", dependencies=[Depends(authenticate)])
     def stats(request: Request, workspace_id: int | None = None):
         return request.app.state.db.stats(workspace_id=workspace_id)
+
+    @app.get("/api/bots", dependencies=[Depends(authenticate)])
+    def bots():
+        """I bot Prime Build affiancati: quello corrente, e gli altri con il loro stato.
+
+        Il probe lo fa il backend e non il browser: da JavaScript una richiesta verso un
+        altro host sarebbe bloccata dal CORS e non si potrebbe distinguere "spento" da
+        "raggiungibile ma di un'altra origine".
+        """
+        configured = dict(settings.bots)
+        result = []
+        for identifier, entry in _BOT_CATALOG.items():
+            url = configured.get(identifier)
+            current = identifier == _CURRENT_BOT
+            result.append(
+                {
+                    "id": identifier,
+                    "name": entry["name"],
+                    "icon": entry["icon"],
+                    "repo": entry["repo"],
+                    "install": entry["install"],
+                    "url": url,
+                    "current": current,
+                    "installed": current or bool(url and _bot_reachable(url)),
+                }
+            )
+        return result
 
     @app.get("/api/workspaces", dependencies=[Depends(authenticate)])
     def workspaces(request: Request):

@@ -52,6 +52,9 @@ class Settings:
     reddit_poll_seconds: int = 900
     process_seconds: int = 10
     relevance_threshold: float = 0.35
+    # Indirizzi degli altri bot Prime Build, per id: {"doorman": "http://127.0.0.1:3000"}.
+    # Servono solo alla dashboard, per sapere quali sono raggiungibili e quali no.
+    bots: tuple[tuple[str, str], ...] = field(default_factory=tuple)
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -103,11 +106,22 @@ class Settings:
             reddit_poll_seconds=int(os.getenv("GNOSIS_REDDIT_POLL_SECONDS", "900")),
             process_seconds=int(os.getenv("GNOSIS_PROCESS_SECONDS", "10")),
             relevance_threshold=float(os.getenv("GNOSIS_RELEVANCE_THRESHOLD", "0.35")),
+            bots=_parse_bots(os.getenv("GNOSIS_BOTS", "")),
         )
 
     @property
     def zoneinfo(self) -> ZoneInfo:
         return ZoneInfo(self.timezone)
+
+
+def _parse_bots(raw: str) -> tuple[tuple[str, str], ...]:
+    """Legge "doorman=http://host:3000,dview=http://host:3001" ignorando le voci malformate."""
+    entries = []
+    for chunk in raw.split(","):
+        identifier, _, url = chunk.partition("=")
+        if identifier.strip() and url.strip():
+            entries.append((identifier.strip().lower(), url.strip().rstrip("/")))
+    return tuple(entries)
 
 
 _ID_FIELDS = {"telegram": "chat_id", "discord": "channel_id", "reddit": "subreddit"}

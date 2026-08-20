@@ -128,6 +128,7 @@ docker compose up -d
 | `OPENAI_API_KEY` | Only if `GNOSIS_EMBEDDING_PROVIDER=openai` or as chat fallback | OpenAI key, needed only when opting into OpenAI for embeddings or chat |
 | `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` | No | Fallback role allowlist. Prefer per-workspace roles, set from the dashboard |
 | `GNOSIS_DIGEST_DISCORD_WEBHOOK` | No | Fallback digest webhook, a single URL. Prefer the per-workspace one |
+| `GNOSIS_BOTS` | No | Other Prime Build bots as `id=url`, comma separated, so the dashboard can link them |
 | `GNOSIS_USERNAME` | Yes | Private web interface username |
 | `GNOSIS_PASSWORD` | Yes | Private web interface password |
 | `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | If enabled | Telegram client credentials |
@@ -178,13 +179,33 @@ The weekly digest can also be pushed automatically (instead of only on-demand) t
 
 ## 🛠️ Admin dashboard
 
-The web UI has **Impostazioni** (settings), **Stato** (status), and **Grafo** tabs alongside chat/digest/sources, so day-to-day administration doesn't require shell access to the host:
+The dashboard is an application shell, not a page of tabs: **platforms down the left rail, the server picker across the top**. Whatever you open, you are looking at it through the server selected up there.
 
-- **Sources**: pick channels from a dropdown of what the bot can actually see — the worker publishes the list, so you never copy 19-digit IDs by hand. The tab states explicitly that these are the channels Gnosis *reads*; the `/ask` and `/digest` commands work in any channel where the bot is present and are not listed here. Toggling an existing source takes effect immediately; a brand-new platform still needs a worker restart to start collecting.
-- **Settings**: opens on a setup checklist showing what is configured and what is missing. Credentials are grouped by section — language model, Discord, Telegram, Reddit — and every field carries an `i` button explaining what it does, where to obtain the value, and what stops working without it. Chat provider keys apply to the running process immediately; platform credentials still need `docker compose restart worker`, because they belong to the worker container and the dashboard deliberately cannot restart containers (that would mean mounting the Docker socket, a privilege escalation this project does not take on by default). The same tab holds workspace settings, the retention window, the wipe button, and the per-platform author ignore-list.
-- **Language**: the whole interface is available in English and Italian, picked from the browser on first load and switchable from the header. All strings live in `static/i18n.js`; the API returns data only, never prose.
-- **Stato**: connector health (per collector, reported by the worker's supervision loop), last activity per source, and raw token usage per model over the last 30 days — counts only, no cost estimate, since provider pricing changes too often to hardcode reliably.
-- **Grafo**: entities (people, tools, projects, organizations, concepts) and relationships extracted automatically from relevant messages, browsable and searchable. Every entity mention and relation links back to the source message — same "no claim without a citation" principle as chat and digests. It's plain Postgres tables (nodes/edges queried with SQL, no graph database), only for messages that already passed the relevance filter, and it's a standalone browsable feature — not yet wired into `/ask`'s answers.
+```
+┌──────────────┬──────────────────────────────────────┐
+│ 🧠 Gnosis    │  Context: [ Prime Build ▾ ]      🌐  │
+│ 🚪 Doorman   ├──────────────────────────────────────┤
+│ 🔐 D-View    │                                      │
+│ ──────────── │   Discord                            │
+│ ◎ Overview   │   ├ Credentials                      │
+│ 💬 Chat      │   ├ Server settings · Prime Build    │
+│ 📰 Digests   │   └ Channels read                    │
+│ 🕸 Graph     │                                      │
+│ ──────────── │                                      │
+│ 🎮 Discord ● │                                      │
+│ ✈ Telegram ○ │                                      │
+│ 👽 Reddit  ○ │                                      │
+└──────────────┴──────────────────────────────────────┘
+```
+
+- **Platforms** each get their own page: credentials, the settings that belong to the selected server (authorized roles, digest webhook), and the channels being read. The dot next to each one says whether it is configured and collecting.
+- **Sources** are picked from a dropdown of channels the bot can actually see; the worker publishes that list, so 19-digit IDs never have to be copied by hand. Each page states plainly that these are the channels Gnosis *reads*, while `/ask` works in any channel where the bot is present.
+- **Every field carries an `i` button** explaining what it does, where the value comes from, and what breaks without it.
+- **Overview** opens on a setup checklist plus what has been collected so far, counted for the selected server.
+- **Language**: English and Italian, guessed from the browser and switchable from the header. All strings live in `static/i18n.js`; the API returns data, never prose.
+- **Bots**: the other Prime Build bots appear in the rail, greyed out until reachable. Set `GNOSIS_BOTS=doorman=http://host:3000,dview=http://host:3001` and they turn into links. The dashboard shows the install command rather than running it — installing from a browser would mean handing the container the Docker socket, which is full control of the host.
+
+The frontend is dependency-free vanilla JS in four files: `i18n.js` (strings), `ui.js` (DOM helpers), `modules.js` (Gnosis pages), `shell.js` (rail, routing, server picker). Only `modules.js` knows anything about Gnosis, which is what makes the shell reusable.
 
 ## 🗂️ Workspaces
 
