@@ -136,13 +136,16 @@ class Database:
                 """
                 INSERT INTO workspaces (name, platform, external_id, allowed_role_ids,
                                         digest_webhook, digest_telegram_chat_id)
-                VALUES (%s, %s, %s, coalesce(%s, '{}'), coalesce(%s, ''), coalesce(%s, ''))
+                VALUES (%s, %s, %s, coalesce(%s::text[], '{}'::text[]),
+                        coalesce(%s::text, ''), coalesce(%s::text, ''))
                 ON CONFLICT (name) DO UPDATE SET
                     platform = coalesce(EXCLUDED.platform, workspaces.platform),
                     external_id = coalesce(EXCLUDED.external_id, workspaces.external_id),
-                    allowed_role_ids = coalesce(%s, workspaces.allowed_role_ids),
-                    digest_webhook = coalesce(%s, workspaces.digest_webhook),
-                    digest_telegram_chat_id = coalesce(%s, workspaces.digest_telegram_chat_id),
+                    allowed_role_ids = coalesce(%s::text[], workspaces.allowed_role_ids),
+                    digest_webhook = coalesce(%s::text, workspaces.digest_webhook),
+                    digest_telegram_chat_id = coalesce(
+                        %s::text, workspaces.digest_telegram_chat_id
+                    ),
                     updated_at = now()
                 RETURNING id
                 """,
