@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import Callable, Iterable
 from typing import Any
 
@@ -13,6 +15,8 @@ from ..types import CollectedMessage
 Emit = Callable[[CollectedMessage], int | None]
 Delete = Callable[[str, str, str], None]
 
+log = logging.getLogger(__name__)
+
 _MAX_REPLY = 2000
 _UNAUTHORIZED = "Non autorizzato, o comando non configurato (GNOSIS_DISCORD_ALLOWED_ROLE_IDS)."
 
@@ -21,6 +25,21 @@ def is_authorized(member_role_ids: Iterable[int], allowed_role_ids: frozenset[in
     return bool(allowed_role_ids) and any(
         role_id in allowed_role_ids for role_id in member_role_ids
     )
+
+
+def allowed_roles_for(workspace: dict[str, Any] | None, fallback: frozenset[int]) -> frozenset[int]:
+    """Ruoli autorizzati per il server da cui arriva il comando.
+
+    Se il server ha un workspace con i suoi ruoli, valgono quelli: e' il punto in cui due
+    server smettono di condividere la stessa allowlist. Senza workspace configurato si usa
+    GNOSIS_DISCORD_ALLOWED_ROLE_IDS, cosi' le installazioni esistenti non cambiano
+    comportamento.
+    """
+    if workspace and workspace.get("allowed_role_ids"):
+        return frozenset(
+            int(value) for value in workspace["allowed_role_ids"] if str(value).strip()
+        )
+    return fallback
 
 
 def _format_answer(result: dict[str, Any]) -> str:
@@ -81,10 +100,36 @@ async def run(
                 )
             )
 
+        def publish_available(self) -> None:
+            """Pubblica i canali visibili perche' la dashboard possa offrirli in una tendina
+            invece di far copiare a mano ID a 19 cifre."""
+            db.replace_available_sources(
+                "discord",
+                [
+                    {
+                        "external_id": str(channel.id),
+                        "name": f"#{channel.name}",
+                        "workspace_external_id": str(guild.id),
+                        "workspace_name": guild.name,
+                    }
+                    for guild in self.guilds
+                    for channel in guild.text_channels
+                ],
+            )
+
+        async def refresh_available_loop(self) -> None:
+            while True:
+                try:
+                    self.publish_available()
+                except Exception:
+                    log.exception("Discord: aggiornamento canali disponibili fallito")
+                await asyncio.sleep(3600)
+
         async def on_ready(self) -> None:
             if self.backfilled:
                 return
             self.backfilled = True
+            self.loop.create_task(self.refresh_available_loop())
             for channel_id in allowed:
                 channel = self.get_channel(channel_id)
                 if isinstance(channel, (discord.TextChannel, discord.Thread)):
@@ -108,22 +153,34 @@ async def run(
             return tuple(role.id for role in interaction.user.roles)
         return ()
 
+    def context_for(interaction: discord.Interaction) -> tuple[frozenset[int], int | None]:
+        """Ruoli autorizzati e workspace del server da cui arriva il comando."""
+        workspace = (
+            db.workspace_for_external_id("discord", str(interaction.guild_id))
+            if interaction.guild_id
+            else None
+        )
+        return allowed_roles_for(workspace, allowed_roles), (workspace["id"] if workspace else None)
+
     @client.tree.command(name="ask", description="Chiedi qualcosa alle fonti raccolte")
     @discord.app_commands.describe(domanda="La tua domanda")
     async def ask_command(interaction: discord.Interaction, domanda: str) -> None:
-        if not is_authorized(member_role_ids(interaction), allowed_roles):
+        roles, workspace_id = context_for(interaction)
+        if not is_authorized(member_role_ids(interaction), roles):
             await interaction.response.send_message(_UNAUTHORIZED, ephemeral=True)
             return
         await interaction.response.defer()
-        result = await rag.ask(domanda)
+        # La risposta cita solo le fonti di questo server, non di tutti quelli configurati.
+        result = await rag.ask(domanda, workspace_id=workspace_id)
         await interaction.followup.send(_format_answer(result))
 
     @client.tree.command(name="digest", description="Ultimo digest settimanale")
     async def digest_command(interaction: discord.Interaction) -> None:
-        if not is_authorized(member_role_ids(interaction), allowed_roles):
+        roles, workspace_id = context_for(interaction)
+        if not is_authorized(member_role_ids(interaction), roles):
             await interaction.response.send_message(_UNAUTHORIZED, ephemeral=True)
             return
-        digests = db.list_digests(limit=1)
+        digests = db.list_digests(limit=1, workspace_id=workspace_id)
         if not digests:
             await interaction.response.send_message("Nessun digest disponibile.", ephemeral=True)
             return

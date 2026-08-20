@@ -64,14 +64,21 @@ class Database:
         with self.connection() as connection:
             connection.execute("UPDATE sources SET enabled = false, updated_at = now()")
             for source in sources:
+                workspace_id = (
+                    self._workspace_id_by_name(connection, source.workspace, source.platform)
+                    if source.workspace
+                    else None
+                )
                 row = connection.execute(
                     """
-                    INSERT INTO sources (platform, external_id, name, enabled, topics)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO sources
+                        (platform, external_id, name, enabled, topics, workspace_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (platform, external_id) DO UPDATE SET
                         name = EXCLUDED.name,
                         enabled = EXCLUDED.enabled,
                         topics = EXCLUDED.topics,
+                        workspace_id = EXCLUDED.workspace_id,
                         updated_at = now()
                     RETURNING id
                     """,
@@ -81,10 +88,127 @@ class Database:
                         source.name,
                         source.enabled,
                         list(source.topics),
+                        workspace_id,
                     ),
                 ).fetchone()
                 result[(source.platform, source.external_id.lower())] = row["id"]
         return result
+
+    @staticmethod
+    def _workspace_id_by_name(connection: Any, name: str, platform: str) -> int:
+        """Crea il workspace nominato in sources.toml se non esiste ancora: il file resta la
+        fonte di verita' dell'allowlist e non richiede un passaggio dalla dashboard."""
+        row = connection.execute(
+            """
+            INSERT INTO workspaces (name, platform) VALUES (%s, %s)
+            ON CONFLICT (name) DO UPDATE SET updated_at = now()
+            RETURNING id
+            """,
+            (name, platform),
+        ).fetchone()
+        return row["id"]
+
+    def list_workspaces(self) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            return list(
+                connection.execute(
+                    """
+                    SELECT w.*, count(s.id) FILTER (WHERE s.enabled) AS active_sources
+                    FROM workspaces w
+                    LEFT JOIN sources s ON s.workspace_id = w.id
+                    GROUP BY w.id ORDER BY w.name
+                    """
+                ).fetchall()
+            )
+
+    def upsert_workspace(
+        self,
+        name: str,
+        platform: str | None = None,
+        external_id: str | None = None,
+        allowed_role_ids: list[str] | None = None,
+        digest_webhook: str | None = None,
+        digest_telegram_chat_id: str | None = None,
+    ) -> int:
+        """I campi lasciati a None non vengono toccati: la dashboard ne salva uno per volta."""
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO workspaces (name, platform, external_id, allowed_role_ids,
+                                        digest_webhook, digest_telegram_chat_id)
+                VALUES (%s, %s, %s, coalesce(%s, '{}'), coalesce(%s, ''), coalesce(%s, ''))
+                ON CONFLICT (name) DO UPDATE SET
+                    platform = coalesce(EXCLUDED.platform, workspaces.platform),
+                    external_id = coalesce(EXCLUDED.external_id, workspaces.external_id),
+                    allowed_role_ids = coalesce(%s, workspaces.allowed_role_ids),
+                    digest_webhook = coalesce(%s, workspaces.digest_webhook),
+                    digest_telegram_chat_id = coalesce(%s, workspaces.digest_telegram_chat_id),
+                    updated_at = now()
+                RETURNING id
+                """,
+                (
+                    name,
+                    platform,
+                    external_id,
+                    allowed_role_ids,
+                    digest_webhook,
+                    digest_telegram_chat_id,
+                    allowed_role_ids,
+                    digest_webhook,
+                    digest_telegram_chat_id,
+                ),
+            ).fetchone()
+            return row["id"]
+
+    def delete_workspace(self, workspace_id: int) -> None:
+        with self.connection() as connection:
+            connection.execute("DELETE FROM workspaces WHERE id = %s", (workspace_id,))
+
+    def workspace_for_external_id(self, platform: str, external_id: str) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            return connection.execute(
+                "SELECT * FROM workspaces WHERE platform = %s AND external_id = %s",
+                (platform, external_id),
+            ).fetchone()
+
+    def replace_available_sources(self, platform: str, rows: list[dict[str, str]]) -> None:
+        """Sostituisce l'elenco dei canali scoperti per una piattaforma. Lo scrive il worker,
+        unico processo con le sessioni Telegram/Discord attive."""
+        with self.connection() as connection:
+            connection.execute("DELETE FROM available_sources WHERE platform = %s", (platform,))
+            for row in rows:
+                connection.execute(
+                    """
+                    INSERT INTO available_sources
+                        (platform, external_id, name, workspace_external_id, workspace_name)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (platform, external_id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        workspace_external_id = EXCLUDED.workspace_external_id,
+                        workspace_name = EXCLUDED.workspace_name,
+                        refreshed_at = now()
+                    """,
+                    (
+                        platform,
+                        row["external_id"],
+                        row["name"],
+                        row.get("workspace_external_id", ""),
+                        row.get("workspace_name", ""),
+                    ),
+                )
+
+    def list_available_sources(self, platform: str = "") -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            return list(
+                connection.execute(
+                    """
+                    SELECT * FROM available_sources
+                    WHERE (%s = '' OR platform = %s)
+                    ORDER BY platform, workspace_name, name
+                    """,
+                    (platform, platform),
+                ).fetchall()
+            )
 
     def save_message(self, source_id: int, message: CollectedMessage, content_hash: str) -> int:
         with self.connection() as connection:
@@ -189,7 +313,15 @@ class Database:
                 (error[:1000], message_id),
             )
 
-    def search(self, query: str, embedding: list[float], limit: int = 12) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        embedding: list[float],
+        limit: int = 12,
+        workspace_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """workspace_id None = tutte le fonti, cioe' il comportamento storico. Con un
+        workspace, le citazioni possono provenire solo dalle sue sorgenti."""
         with self.connection() as connection:
             return list(
                 connection.execute(
@@ -219,15 +351,26 @@ class Database:
                     JOIN chunks c ON c.id = scores.id
                     JOIN messages m ON m.id = c.message_id
                     JOIN sources s ON s.id = m.source_id
-                    WHERE s.enabled
+                    WHERE s.enabled AND (%s::bigint IS NULL OR s.workspace_id = %s)
                     ORDER BY scores.score + 0.002 / (1 + EXTRACT(EPOCH FROM (now() - m.sent_at)) / 2592000) DESC
                     LIMIT %s
                     """,
-                    (Vector(embedding), Vector(embedding), query, query, query, limit),
+                    (
+                        Vector(embedding),
+                        Vector(embedding),
+                        query,
+                        query,
+                        query,
+                        workspace_id,
+                        workspace_id,
+                        limit,
+                    ),
                 ).fetchall()
             )
 
-    def messages_between(self, start: datetime, end: datetime) -> list[dict[str, Any]]:
+    def messages_between(
+        self, start: datetime, end: datetime, workspace_id: int | None = None
+    ) -> list[dict[str, Any]]:
         with self.connection() as connection:
             return list(
                 connection.execute(
@@ -237,56 +380,87 @@ class Database:
                     FROM messages m JOIN sources s ON s.id = m.source_id
                     WHERE s.enabled AND m.status = 'processed'
                       AND m.sent_at >= %s AND m.sent_at < %s
+                      AND (%s::bigint IS NULL OR s.workspace_id = %s)
                     ORDER BY m.sent_at
                     """,
-                    (start, end),
+                    (start, end, workspace_id, workspace_id),
                 ).fetchall()
             )
 
-    def save_digest(self, start: datetime, end: datetime, markdown: str, source_count: int) -> int:
+    def save_digest(
+        self,
+        start: datetime,
+        end: datetime,
+        markdown: str,
+        source_count: int,
+        workspace_id: int | None = None,
+    ) -> int:
         with self.connection() as connection:
             row = connection.execute(
                 """
-                INSERT INTO digests (period_start, period_end, markdown, source_count)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (period_start, period_end) DO UPDATE SET
+                INSERT INTO digests
+                    (period_start, period_end, markdown, source_count, workspace_id)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (workspace_id, period_start, period_end) DO UPDATE SET
                     markdown = EXCLUDED.markdown,
                     source_count = EXCLUDED.source_count,
                     created_at = now()
                 RETURNING id
                 """,
-                (start, end, markdown, source_count),
+                (start, end, markdown, source_count, workspace_id),
             ).fetchone()
             return row["id"]
 
-    def list_digests(self, limit: int = 20) -> list[dict[str, Any]]:
+    def list_digests(
+        self, limit: int = 20, workspace_id: int | None = None
+    ) -> list[dict[str, Any]]:
         with self.connection() as connection:
             return list(
                 connection.execute(
-                    "SELECT * FROM digests ORDER BY period_start DESC LIMIT %s", (limit,)
+                    """
+                    SELECT d.*, w.name AS workspace_name FROM digests d
+                    LEFT JOIN workspaces w ON w.id = d.workspace_id
+                    WHERE (%s::bigint IS NULL OR d.workspace_id = %s)
+                    ORDER BY d.period_start DESC LIMIT %s
+                    """,
+                    (workspace_id, workspace_id, limit),
                 ).fetchall()
             )
 
-    def digest_exists(self, start: datetime, end: datetime) -> bool:
+    def digest_exists(
+        self, start: datetime, end: datetime, workspace_id: int | None = None
+    ) -> bool:
         with self.connection() as connection:
             return (
                 connection.execute(
-                    "SELECT 1 FROM digests WHERE period_start = %s AND period_end = %s",
-                    (start, end),
+                    """
+                    SELECT 1 FROM digests
+                    WHERE period_start = %s AND period_end = %s
+                      AND workspace_id IS NOT DISTINCT FROM %s
+                    """,
+                    (start, end, workspace_id),
                 ).fetchone()
                 is not None
             )
 
-    def stats(self) -> dict[str, int]:
+    def stats(self, workspace_id: int | None = None) -> dict[str, int]:
         with self.connection() as connection:
             row = connection.execute(
                 """
                 SELECT
-                    (SELECT count(*) FROM sources WHERE enabled) AS sources,
-                    (SELECT count(*) FROM messages) AS messages,
-                    (SELECT count(*) FROM chunks) AS chunks,
-                    (SELECT count(*) FROM digests) AS digests
-                """
+                    (SELECT count(*) FROM sources s
+                     WHERE s.enabled
+                       AND (%s::bigint IS NULL OR s.workspace_id = %s)) AS sources,
+                    (SELECT count(*) FROM messages m JOIN sources s ON s.id = m.source_id
+                     WHERE (%s::bigint IS NULL OR s.workspace_id = %s)) AS messages,
+                    (SELECT count(*) FROM chunks c
+                     JOIN messages m ON m.id = c.message_id
+                     JOIN sources s ON s.id = m.source_id
+                     WHERE (%s::bigint IS NULL OR s.workspace_id = %s)) AS chunks,
+                    (SELECT count(*) FROM digests d
+                     WHERE (%s::bigint IS NULL OR d.workspace_id = %s)) AS digests
+                """,
+                (workspace_id,) * 8,
             ).fetchone()
             return dict(row)
 
@@ -294,8 +468,10 @@ class Database:
         with self.connection() as connection:
             return list(
                 connection.execute(
-                    "SELECT platform, external_id, name, enabled, topics, updated_at "
-                    "FROM sources ORDER BY platform, name"
+                    "SELECT s.platform, s.external_id, s.name, s.enabled, s.topics, "
+                    "s.updated_at, s.workspace_id, w.name AS workspace_name "
+                    "FROM sources s LEFT JOIN workspaces w ON w.id = s.workspace_id "
+                    "ORDER BY s.platform, s.name"
                 ).fetchall()
             )
 
@@ -333,12 +509,13 @@ class Database:
             return list(
                 connection.execute(
                     """
-                    SELECT s.platform, s.name, s.enabled,
+                    SELECT s.platform, s.name, s.enabled, w.name AS workspace_name,
                            max(m.processed_at) AS last_processed_at,
                            count(m.id) FILTER (WHERE m.status = 'pending') AS pending
                     FROM sources s
                     LEFT JOIN messages m ON m.source_id = s.id
-                    GROUP BY s.id, s.platform, s.name, s.enabled
+                    LEFT JOIN workspaces w ON w.id = s.workspace_id
+                    GROUP BY s.id, s.platform, s.name, s.enabled, w.name
                     ORDER BY s.platform, s.name
                     """
                 ).fetchall()

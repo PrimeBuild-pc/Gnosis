@@ -1,3 +1,7 @@
+// Ogni nodo viene costruito con createElement e textContent: Gnosis ingerisce contenuti di
+// terze parti (autori, nomi di canale, entita' estratte dall'LLM) e nulla di tutto cio' deve
+// poter finire nel DOM come HTML.
+
 const request = async (url, options = {}) => {
   const response = await fetch(url, {headers: {'Content-Type': 'application/json'}, ...options});
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || response.statusText);
@@ -5,9 +9,92 @@ const request = async (url, options = {}) => {
 };
 
 const showError = (element, error) => {
-  element.textContent = `Errore: ${error.message}`;
+  element.textContent = `${t('error')}: ${error.message}`;
   element.className = 'error';
 };
+
+const el = (tag, options = {}) => {
+  const node = document.createElement(tag);
+  if (options.text !== undefined) node.textContent = options.text;
+  if (options.className) node.className = options.className;
+  if (options.i18n) node.dataset.i18n = options.i18n;
+  return node;
+};
+
+// --- contesto selezionato ---------------------------------------------------
+
+let workspaces = [];
+const workspaceId = () => {
+  const raw = localStorage.getItem('gnosis-workspace');
+  return raw && raw !== 'all' ? Number(raw) : null;
+};
+const scopeQuery = () => (workspaceId() === null ? '' : `?workspace_id=${workspaceId()}`);
+
+const renderWorkspaceSelect = () => {
+  const select = document.getElementById('workspace-select');
+  const current = localStorage.getItem('gnosis-workspace') || 'all';
+  select.replaceChildren(
+    ...[{id: 'all', name: t('workspace.all')}, ...workspaces].map(item => {
+      const option = el('option', {text: item.name});
+      option.value = String(item.id);
+      option.selected = String(item.id) === current;
+      return option;
+    }),
+  );
+};
+
+const loadWorkspaces = async () => {
+  try {
+    workspaces = await request('/api/workspaces');
+  } catch {
+    workspaces = [];
+  }
+  renderWorkspaceSelect();
+  const names = document.getElementById('workspace-names');
+  names.replaceChildren(...workspaces.map(w => {
+    const option = el('option');
+    option.value = w.name;
+    return option;
+  }));
+  renderWorkspaceList();
+};
+
+document.getElementById('workspace-select').addEventListener('change', event => {
+  localStorage.setItem('gnosis-workspace', event.target.value);
+  refreshScopedViews();
+});
+
+const refreshScopedViews = () => {
+  loadDigests();
+  loadSources();
+  loadStatus();
+  document.getElementById('answer').replaceChildren();
+};
+
+// --- lingua -----------------------------------------------------------------
+
+const languageSelect = document.getElementById('language-select');
+languageSelect.replaceChildren(...LANGUAGES.map(([code, label]) => {
+  const option = el('option', {text: label});
+  option.value = code;
+  option.selected = code === currentLanguage;
+  return option;
+}));
+languageSelect.addEventListener('change', event => setLanguage(event.target.value));
+
+// Le viste costruite in JavaScript non hanno data-i18n, quindi vanno ridisegnate a mano.
+document.addEventListener('gnosis:language', () => {
+  renderWorkspaceSelect();
+  renderWorkspaceList();
+  loadSetup();
+  loadConfig();
+  loadSources();
+  loadDigests();
+  loadStatus();
+  loadIgnored();
+});
+
+// --- navigazione ------------------------------------------------------------
 
 document.querySelectorAll('nav button').forEach(button => button.addEventListener('click', () => {
   document.querySelectorAll('nav button, .view').forEach(node => node.classList.remove('active'));
@@ -15,155 +102,245 @@ document.querySelectorAll('nav button').forEach(button => button.addEventListene
   document.getElementById(button.dataset.view).classList.add('active');
 }));
 
+// --- chat -------------------------------------------------------------------
+
 document.getElementById('question-form').addEventListener('submit', async event => {
   event.preventDefault();
   const answer = document.getElementById('answer');
   answer.className = '';
-  answer.textContent = 'Ricerca in corso…';
+  answer.textContent = t('chat.searching');
   try {
-    const data = await request('/api/chat', {method: 'POST', body: JSON.stringify({question: document.getElementById('question').value})});
-    answer.textContent = data.answer;
+    const data = await request('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        question: document.getElementById('question').value,
+        workspace_id: workspaceId(),
+      }),
+    });
+    answer.replaceChildren(el('p', {text: data.answer}));
     if (data.sources.length) {
-      const list = document.createElement('ul');
+      const list = el('ul');
       data.sources.forEach(source => {
-        const item = document.createElement('li');
-        const link = document.createElement('a');
-        link.href = source.url || '#';
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = `${source.id} — ${source.platform}/${source.community}, ${source.author}`;
-        item.append(link);
+        const item = el('li');
+        if (source.url) {
+          const link = el('a', {text: `[M${source.id}] ${source.community}`});
+          link.href = source.url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          item.append(link);
+        } else {
+          item.textContent = `[M${source.id}] ${source.community}`;
+        }
         list.append(item);
       });
       answer.append(list);
+    } else {
+      answer.append(el('p', {className: 'hint', text: t('chat.noSources')}));
     }
   } catch (error) { showError(answer, error); }
 });
 
+// --- digest -----------------------------------------------------------------
+
 const loadDigests = async () => {
   const target = document.getElementById('digest-list');
   try {
-    const data = await request('/api/digests');
+    const data = await request(`/api/digests${scopeQuery()}`);
+    if (!data.length) {
+      target.textContent = t('digests.empty');
+      target.className = 'hint';
+      return;
+    }
+    target.className = '';
     target.replaceChildren(...data.map(digest => {
-      const article = document.createElement('article');
-      article.textContent = `${new Date(digest.period_start).toLocaleDateString()} – ${new Date(digest.period_end).toLocaleDateString()}\n\n${digest.markdown}`;
+      const article = el('article');
+      const period = new Date(digest.period_start).toLocaleDateString(currentLanguage);
+      const title = digest.workspace_name ? `${period} — ${digest.workspace_name}` : period;
+      article.append(el('strong', {text: title}), el('p', {text: digest.markdown}));
       return article;
     }));
   } catch (error) { showError(target, error); }
 };
 
+document.getElementById('refresh-digests').addEventListener('click', loadDigests);
+
+document.getElementById('run-digest').addEventListener('click', async () => {
+  const result = document.getElementById('digest-result');
+  result.className = 'hint';
+  result.textContent = t('digests.running');
+  try {
+    const data = await request(`/api/digests/run${scopeQuery()}`, {method: 'POST'});
+    result.textContent = data.id ? '' : t('digests.noMessages');
+    loadDigests();
+  } catch (error) { showError(result, error); }
+});
+
+// --- sorgenti ---------------------------------------------------------------
+
 const loadSources = async () => {
   const target = document.getElementById('source-list');
   try {
     const data = await request('/api/sources');
-    target.replaceChildren(...data.map(source => {
-      const item = document.createElement('div');
-      item.className = 'source';
-      item.textContent = `${source.platform} — ${source.name} (${source.enabled ? 'attiva' : 'disattivata'})`;
-      return item;
+    const visible = workspaceId() === null
+      ? data
+      : data.filter(source => source.workspace_id === workspaceId());
+    if (!visible.length) {
+      target.textContent = t('sources.none');
+      target.className = 'hint';
+      return;
+    }
+    target.className = '';
+    target.replaceChildren(...visible.map(source => {
+      const row = el('div', {className: 'source'});
+      const label = `${source.platform} · ${source.name}`;
+      row.append(el('strong', {text: label}));
+      const detail = [
+        source.workspace_name || t('workspace.all'),
+        (source.topics || []).join(', '),
+        source.enabled ? '✓' : '✗',
+      ].filter(Boolean).join(' — ');
+      row.append(el('p', {className: 'hint', text: detail}));
+      return row;
     }));
   } catch (error) { showError(target, error); }
 };
 
-document.getElementById('refresh-digests').addEventListener('click', loadDigests);
 document.getElementById('refresh-sources').addEventListener('click', loadSources);
+
+const loadAvailableSources = async () => {
+  const platform = document.getElementById('source-platform').value;
+  const select = document.getElementById('source-pick');
+  const hint = document.getElementById('source-pick-hint');
+  const manual = el('option', {text: t('sources.pickManual')});
+  manual.value = '';
+  if (platform === 'reddit') {
+    select.replaceChildren(manual);
+    hint.textContent = '';
+    return;
+  }
+  try {
+    const data = await request(`/api/available-sources?platform=${platform}`);
+    if (!data.length) {
+      select.replaceChildren(manual);
+      hint.textContent = t('sources.pickEmpty');
+      return;
+    }
+    hint.textContent = '';
+    const placeholder = el('option', {text: t('sources.pickPlaceholder')});
+    placeholder.value = '';
+    select.replaceChildren(placeholder, ...data.map(item => {
+      const option = el('option', {
+        text: item.workspace_name ? `${item.name} — ${item.workspace_name}` : item.name,
+      });
+      option.value = item.external_id;
+      option.dataset.name = item.name;
+      option.dataset.workspace = item.workspace_name || '';
+      return option;
+    }), manual);
+  } catch (error) { showError(hint, error); }
+};
+
+document.getElementById('source-platform').addEventListener('change', loadAvailableSources);
+
+// Scegliere dalla tendina riempie ID, nome e workspace: restano modificabili a mano.
+document.getElementById('source-pick').addEventListener('change', event => {
+  const option = event.target.selectedOptions[0];
+  if (!option || !option.value) return;
+  document.getElementById('source-id').value = option.value;
+  document.getElementById('source-name').value = option.dataset.name || '';
+  if (option.dataset.workspace) {
+    document.getElementById('source-workspace').value = option.dataset.workspace;
+  }
+});
 
 document.getElementById('source-form').addEventListener('submit', async event => {
   event.preventDefault();
   const result = document.getElementById('source-form-result');
   result.className = '';
   try {
-    const topics = document.getElementById('source-topics').value
-      .split(',').map(topic => topic.trim()).filter(Boolean);
-    await request('/api/sources', {method: 'POST', body: JSON.stringify({
-      platform: document.getElementById('source-platform').value,
-      external_id: document.getElementById('source-id').value,
-      name: document.getElementById('source-name').value,
-      enabled: document.getElementById('source-enabled').checked,
-      topics,
-    })});
-    result.textContent = 'Sorgente salvata.';
-    document.getElementById('source-form').reset();
-    document.getElementById('source-enabled').checked = true;
+    await request('/api/sources', {
+      method: 'POST',
+      body: JSON.stringify({
+        platform: document.getElementById('source-platform').value,
+        external_id: document.getElementById('source-id').value.trim(),
+        name: document.getElementById('source-name').value.trim(),
+        enabled: document.getElementById('source-enabled').checked,
+        workspace: document.getElementById('source-workspace').value.trim(),
+        topics: document.getElementById('source-topics').value
+          .split(',').map(value => value.trim()).filter(Boolean),
+      }),
+    });
+    result.textContent = t('sources.save');
     loadSources();
+    loadWorkspaces();
   } catch (error) { showError(result, error); }
 });
 
-const CONFIG_LABELS = {
-  GNOSIS_CHAT_API_KEY: 'Chiave API chat',
-  GNOSIS_CHAT_BASE_URL: 'Base URL chat (OpenAI-compatibile)',
-  OPENAI_CHAT_MODEL: 'Modello chat',
-  OPENAI_API_KEY: 'Chiave API OpenAI (embedding/fallback)',
-  OPENAI_BASE_URL: 'Base URL OpenAI',
-  GNOSIS_EMBEDDING_PROVIDER: 'Provider embedding (local/openai)',
-  TELEGRAM_API_ID: 'Telegram API ID',
-  TELEGRAM_API_HASH: 'Telegram API hash',
-  TELEGRAM_BOT_TOKEN: 'Token bot Telegram',
-  GNOSIS_TELEGRAM_ALLOWED_USERS: 'ID utenti Telegram autorizzati (virgola)',
-  DISCORD_BOT_TOKEN: 'Token bot Discord',
-  GNOSIS_DISCORD_ALLOWED_ROLE_IDS: 'ID ruoli Discord autorizzati (virgola)',
-  REDDIT_CLIENT_ID: 'Reddit client ID',
-  REDDIT_CLIENT_SECRET: 'Reddit client secret',
-  GNOSIS_DIGEST_TELEGRAM_CHAT_ID: 'Chat Telegram per il digest automatico (facoltativo)',
-  GNOSIS_DIGEST_DISCORD_WEBHOOK: 'Webhook Discord per il digest automatico (facoltativo)',
-};
+// --- checklist di setup -----------------------------------------------------
 
 const loadSetup = async () => {
   const target = document.getElementById('setup-steps');
   try {
     const steps = await request('/api/setup');
     target.replaceChildren(...steps.map(step => {
-      const card = document.createElement('div');
-      card.className = step.ready ? 'setup-step ready' : 'setup-step';
+      const card = el('div', {className: step.ready ? 'setup-step ready' : 'setup-step'});
+      const title = `${step.ready ? '✓' : '○'} ${t(`setup.${step.key}`)}` +
+        (step.required ? ` (${t('settings.required')})` : '');
+      card.append(el('div', {className: 'setup-title', text: title}));
 
-      const title = document.createElement('div');
-      title.className = 'setup-title';
-      title.textContent = `${step.ready ? '✓' : '○'} ${step.label}`;
-      if (step.required) title.textContent += ' (obbligatorio)';
-      card.append(title);
-
-      const state = document.createElement('p');
-      if (!step.ready) {
-        state.textContent = `Da configurare: ${step.fields.join(', ')}`;
-      } else if (step.sources === 0) {
-        state.textContent = 'Credenziali presenti, ma nessuna sorgente attiva: aggiungine una nel tab Sorgenti.';
-        state.className = 'hint';
-      } else if (step.sources) {
-        state.textContent = `Attiva su ${step.sources} sorgent${step.sources === 1 ? 'e' : 'i'}.`;
-        state.className = 'hint';
-      } else {
-        state.textContent = 'Configurato.';
-        state.className = 'hint';
-      }
+      const state = el('p', {className: 'hint'});
+      if (!step.ready) state.textContent = `${t('settings.missing')} ${step.fields.join(', ')}`;
+      else if (step.sources === 0) state.textContent = t('settings.noSources');
+      else if (step.sources) state.textContent = t('settings.sourcesActive', {n: step.sources});
+      else state.textContent = t('settings.ready');
       card.append(state);
 
-      const hint = document.createElement('p');
-      hint.className = 'hint';
-      hint.textContent = `${step.hint} `;
-      const link = document.createElement('a');
-      link.href = step.docs;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = 'Apri';
-      hint.append(link);
-      card.append(hint);
+      card.append(el('p', {className: 'hint', text: t(`setup.${step.key}.hint`)}));
       return card;
     }));
   } catch (error) { showError(target, error); }
 };
 
+// --- configurazione a sezioni ----------------------------------------------
+
+const SECTION_ORDER = ['llm', 'discord', 'telegram', 'reddit'];
+
 const loadConfig = async () => {
-  const target = document.getElementById('config-fields');
+  const target = document.getElementById('config-sections');
   try {
-    const data = await request('/api/config');
-    target.replaceChildren(...Object.entries(data).map(([key, current]) => {
-      const wrapper = document.createElement('label');
-      wrapper.textContent = CONFIG_LABELS[key] || key;
-      const input = document.createElement('input');
-      input.dataset.key = key;
-      input.placeholder = current ? `attuale: ${current}` : 'non impostato';
-      wrapper.append(input);
-      return wrapper;
+    const fields = await request('/api/config');
+    const bySection = new Map(SECTION_ORDER.map(name => [name, []]));
+    fields.forEach(field => bySection.get(field.section)?.push(field));
+
+    target.replaceChildren(...SECTION_ORDER.map(section => {
+      const block = el('section', {className: 'config-section'});
+      block.append(el('h4', {text: t(`section.${section}`)}));
+      block.append(el('p', {className: 'hint', text: t(`section.${section}.intro`)}));
+
+      bySection.get(section).forEach(field => {
+        const wrapper = el('div', {className: 'field'});
+        const header = el('div', {className: 'field-header'});
+        const label = el('label', {text: t(`field.${field.key}.label`)});
+        label.htmlFor = `config-${field.key}`;
+        const info = el('button', {className: 'info', text: 'i'});
+        info.type = 'button';
+        info.title = t('settings.info');
+        header.append(label, info);
+
+        const input = el('input');
+        input.id = `config-${field.key}`;
+        input.dataset.key = field.key;
+        input.placeholder = field.value || '—';
+        if (field.secret) input.type = 'password';
+
+        const help = el('p', {className: 'hint help', text: t(`field.${field.key}.help`)});
+        help.hidden = true;
+        info.addEventListener('click', () => { help.hidden = !help.hidden; });
+
+        wrapper.append(header, input, help);
+        block.append(wrapper);
+      });
+      return block;
     }));
   } catch (error) { showError(target, error); }
 };
@@ -173,54 +350,120 @@ document.getElementById('config-form').addEventListener('submit', async event =>
   const result = document.getElementById('config-result');
   result.className = '';
   const values = {};
-  document.querySelectorAll('#config-fields input').forEach(input => {
+  document.querySelectorAll('#config-sections input').forEach(input => {
     if (input.value.trim()) values[input.dataset.key] = input.value.trim();
   });
   if (!Object.keys(values).length) {
-    result.textContent = 'Nessuna modifica da salvare.';
+    result.textContent = t('settings.noChange');
     return;
   }
   try {
     const saved = await request('/api/config', {method: 'POST', body: JSON.stringify({values})});
-    result.textContent = saved.restart_required
-      ? 'Configurazione salvata. Riavvia lo stack (docker compose restart) per applicarla.'
-      : 'Configurazione salvata e applicata subito.';
+    result.textContent = saved.restart_required ? t('settings.savedRestart') : t('settings.savedLive');
     loadConfig();
     loadSetup();
   } catch (error) { showError(result, error); }
 });
 
+// --- workspace --------------------------------------------------------------
+
+const renderWorkspaceList = () => {
+  const target = document.getElementById('workspace-list');
+  if (!workspaces.length) {
+    target.textContent = t('workspace.none');
+    target.className = 'hint';
+    return;
+  }
+  target.className = '';
+  target.replaceChildren(...workspaces.map(workspace => {
+    const row = el('div', {className: 'source'});
+    row.append(el('strong', {text: workspace.name}));
+    const detail = [
+      workspace.platform || '',
+      `${workspace.active_sources} ${t('workspace.activeSources')}`,
+      workspace.digest_webhook ? 'webhook ✓' : '',
+    ].filter(Boolean).join(' — ');
+    row.append(el('p', {className: 'hint', text: detail}));
+
+    const remove = el('button', {className: 'danger', text: t('workspace.delete')});
+    remove.type = 'button';
+    remove.addEventListener('click', async () => {
+      if (!confirm(t('workspace.deleteConfirm'))) return;
+      await request(`/api/workspaces/${workspace.id}`, {method: 'DELETE'});
+      loadWorkspaces();
+    });
+    row.append(remove);
+
+    const edit = el('button', {text: t('workspace.save')});
+    edit.type = 'button';
+    edit.textContent = '✎';
+    edit.addEventListener('click', () => {
+      document.getElementById('workspace-name').value = workspace.name;
+      document.getElementById('workspace-platform').value = workspace.platform || '';
+      document.getElementById('workspace-external').value = workspace.external_id || '';
+      document.getElementById('workspace-roles').value = (workspace.allowed_role_ids || []).join(',');
+      document.getElementById('workspace-webhook').value = workspace.digest_webhook || '';
+      document.getElementById('workspace-telegram-chat').value = workspace.digest_telegram_chat_id || '';
+    });
+    row.append(edit);
+    return row;
+  }));
+};
+
+document.getElementById('workspace-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const result = document.getElementById('workspace-result');
+  result.className = '';
+  const roles = document.getElementById('workspace-roles').value
+    .split(',').map(value => value.trim()).filter(Boolean);
+  try {
+    await request('/api/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: document.getElementById('workspace-name').value.trim(),
+        platform: document.getElementById('workspace-platform').value || null,
+        external_id: document.getElementById('workspace-external').value.trim() || null,
+        allowed_role_ids: roles,
+        digest_webhook: document.getElementById('workspace-webhook').value.trim(),
+        digest_telegram_chat_id: document.getElementById('workspace-telegram-chat').value.trim(),
+      }),
+    });
+    result.textContent = t('workspace.save');
+    loadWorkspaces();
+  } catch (error) { showError(result, error); }
+});
+
+// --- retention, wipe, ignorati ---------------------------------------------
+
 const loadRetention = async () => {
   try {
     const data = await request('/api/settings/retention');
     document.getElementById('retention-days').value = data.days ?? '';
-  } catch (error) { showError(document.getElementById('retention-result'), error); }
+  } catch { /* la sezione resta vuota, non vale un errore a schermo */ }
 };
 
 document.getElementById('retention-form').addEventListener('submit', async event => {
   event.preventDefault();
   const result = document.getElementById('retention-result');
   result.className = '';
-  const raw = document.getElementById('retention-days').value;
+  const raw = document.getElementById('retention-days').value.trim();
   try {
-    await request('/api/settings/retention', {method: 'POST', body: JSON.stringify({
-      days: raw ? parseInt(raw, 10) : null,
-    })});
-    result.textContent = 'Conservazione aggiornata.';
+    await request('/api/settings/retention', {
+      method: 'POST',
+      body: JSON.stringify({days: raw ? Number(raw) : null}),
+    });
+    result.textContent = t('retention.save');
   } catch (error) { showError(result, error); }
 });
 
 document.getElementById('wipe-button').addEventListener('click', async () => {
   const result = document.getElementById('wipe-result');
   result.className = '';
-  const confirmation = prompt('Questa azione è irreversibile. Scrivi WIPE per confermare la cancellazione di tutti i messaggi raccolti.');
-  if (confirmation !== 'WIPE') {
-    result.textContent = 'Annullato.';
-    return;
-  }
+  if (!confirm(t('wipe.confirm'))) return;
   try {
-    await request('/api/wipe', {method: 'POST', body: JSON.stringify({confirm: confirmation})});
-    result.textContent = 'Memoria cancellata.';
+    await request('/api/wipe', {method: 'POST', body: JSON.stringify({confirm: 'WIPE'})});
+    result.textContent = t('wipe.button');
+    loadSources();
   } catch (error) { showError(result, error); }
 });
 
@@ -229,21 +472,22 @@ const loadIgnored = async () => {
   try {
     const data = await request('/api/ignored-authors');
     if (!data.length) {
-      target.textContent = 'Nessun utente ignorato.';
+      target.textContent = t('ignored.none');
+      target.className = 'hint';
       return;
     }
+    target.className = '';
     target.replaceChildren(...data.map(entry => {
-      const item = document.createElement('div');
-      item.className = 'source';
-      item.textContent = `${entry.platform} — ${entry.author_id} `;
-      const removeButton = document.createElement('button');
-      removeButton.textContent = 'Rimuovi';
-      removeButton.addEventListener('click', async () => {
+      const row = el('div', {className: 'source'});
+      row.append(el('span', {text: `${entry.platform} · ${entry.author_id}`}));
+      const remove = el('button', {text: t('ignored.remove')});
+      remove.type = 'button';
+      remove.addEventListener('click', async () => {
         await request(`/api/ignored-authors/${entry.platform}/${entry.author_id}`, {method: 'DELETE'});
         loadIgnored();
       });
-      item.append(removeButton);
-      return item;
+      row.append(remove);
+      return row;
     }));
   } catch (error) { showError(target, error); }
 };
@@ -251,106 +495,73 @@ const loadIgnored = async () => {
 document.getElementById('ignore-form').addEventListener('submit', async event => {
   event.preventDefault();
   try {
-    await request('/api/ignored-authors', {method: 'POST', body: JSON.stringify({
-      platform: document.getElementById('ignore-platform').value,
-      author_id: document.getElementById('ignore-author').value,
-    })});
-    document.getElementById('ignore-form').reset();
+    await request('/api/ignored-authors', {
+      method: 'POST',
+      body: JSON.stringify({
+        platform: document.getElementById('ignore-platform').value,
+        author_id: document.getElementById('ignore-author').value.trim(),
+      }),
+    });
+    document.getElementById('ignore-author').value = '';
     loadIgnored();
   } catch (error) { showError(document.getElementById('ignored-list'), error); }
 });
 
+// --- stato ------------------------------------------------------------------
+
 const loadStatus = async () => {
-  const workerTarget = document.getElementById('worker-status');
-  const sourceTarget = document.getElementById('source-status');
+  const workers = document.getElementById('worker-status');
+  const sources = document.getElementById('source-status');
+  const usage = document.getElementById('usage-status');
   try {
     const data = await request('/api/status');
-    workerTarget.replaceChildren(...(data.workers.length ? data.workers.map(w => {
-      const item = document.createElement('div');
-      item.className = 'source';
-      item.textContent = `${w.component}: ${w.status}${w.detail ? ' — ' + w.detail : ''} (${new Date(w.updated_at).toLocaleString()})`;
-      return item;
-    }) : [Object.assign(document.createElement('div'), {textContent: 'Nessun dato ancora (il worker non ha ancora fatto un ciclo).'})]));
-    sourceTarget.replaceChildren(...data.sources.map(s => {
-      const item = document.createElement('div');
-      item.className = 'source';
-      const last = s.last_processed_at ? new Date(s.last_processed_at).toLocaleString() : 'mai';
-      item.textContent = `${s.platform} — ${s.name} (${s.enabled ? 'attiva' : 'disattivata'}), ultimo messaggio: ${last}, in coda: ${s.pending}`;
-      return item;
+    workers.replaceChildren(...data.workers.map(worker => {
+      const row = el('div', {className: 'source'});
+      row.append(el('strong', {text: `${worker.component}: ${worker.status}`}));
+      if (worker.detail) row.append(el('p', {className: 'error', text: worker.detail}));
+      return row;
     }));
-  } catch (error) { showError(workerTarget, error); }
-};
 
-const loadUsage = async () => {
-  const target = document.getElementById('usage-status');
-  try {
-    const data = await request('/api/usage');
-    if (!data.length) {
-      target.textContent = 'Nessun utilizzo registrato negli ultimi 30 giorni.';
-      return;
-    }
-    target.replaceChildren(...data.map(row => {
-      const item = document.createElement('div');
-      item.className = 'source';
-      item.textContent = `${row.kind}/${row.model}: ${row.requests} richieste, ${row.prompt_tokens} token prompt, ${row.completion_tokens} token risposta`;
-      return item;
+    const visible = workspaceId() === null
+      ? data.sources
+      : data.sources.filter(source => {
+          const workspace = workspaces.find(w => w.id === workspaceId());
+          return workspace && source.workspace_name === workspace.name;
+        });
+    sources.replaceChildren(...visible.map(source => {
+      const row = el('div', {className: 'source'});
+      row.append(el('strong', {text: `${source.platform} · ${source.name}`}));
+      const last = source.last_processed_at
+        ? new Date(source.last_processed_at).toLocaleString(currentLanguage)
+        : t('status.never');
+      row.append(el('p', {
+        className: 'hint',
+        text: `${t('status.lastActivity')}: ${last} — ${source.pending} ${t('status.pending')}`,
+      }));
+      return row;
     }));
-  } catch (error) { showError(target, error); }
+
+    const stats = await request(`/api/usage`);
+    usage.replaceChildren(...stats.map(entry => el('div', {
+      className: 'source',
+      text: `${entry.model}: ${entry.prompt_tokens} + ${entry.completion_tokens}`,
+    })));
+  } catch (error) { showError(workers, error); }
 };
 
-document.getElementById('refresh-status').addEventListener('click', () => { loadStatus(); loadUsage(); });
+document.getElementById('refresh-status').addEventListener('click', loadStatus);
 
-const textEl = (tag, text, className) => {
-  const node = document.createElement(tag);
-  node.textContent = text;
-  if (className) node.className = className;
-  return node;
-};
+// --- grafo ------------------------------------------------------------------
 
-const loadEntityDetail = async entityId => {
+const loadEntityDetail = async id => {
   const target = document.getElementById('entity-detail');
-  target.className = '';
   try {
-    const data = await request(`/api/entities/${entityId}`);
-
-    const heading = document.createElement('h3');
-    heading.append(`${data.entity.name} `, textEl('span', `(${data.entity.type})`, 'hint'));
-
-    const relationsHeading = textEl('h4', 'Relazioni');
-    const relationsBody = data.relations.length
-      ? (() => {
-          const list = document.createElement('ul');
-          list.append(...data.relations.map(r =>
-            textEl('li', `${r.source_name} — ${r.relation} — ${r.target_name}`)
-          ));
-          return list;
-        })()
-      : textEl('p', 'Nessuna relazione registrata.', 'hint');
-
-    const mentionsHeading = textEl('h4', 'Menzioni');
-    const mentionsBody = data.mentions.length
-      ? (() => {
-          const list = document.createElement('ul');
-          list.append(...data.mentions.map(m => {
-            const date = new Date(m.sent_at).toLocaleString();
-            const item = document.createElement('li');
-            if (m.url) {
-              const link = document.createElement('a');
-              link.href = m.url;
-              link.target = '_blank';
-              link.rel = 'noopener noreferrer';
-              link.textContent = `${m.platform}/${m.source_name}`;
-              item.append(link, `, ${m.author}, ${date}`);
-            } else {
-              item.textContent = `${m.platform}/${m.source_name}, ${m.author}, ${date}`;
-            }
-            return item;
-          }));
-          return list;
-        })()
-      : textEl('p', 'Nessuna menzione registrata.', 'hint');
-
-    target.replaceChildren(heading, relationsHeading, relationsBody, mentionsHeading, mentionsBody);
+    const data = await request(`/api/entities/${id}`);
+    target.replaceChildren(el('strong', {text: `${data.name} (${data.type})`}));
+    (data.mentions || []).forEach(mention => {
+      const row = el('div', {className: 'source', text: mention.text});
+      target.append(row);
+    });
   } catch (error) { showError(target, error); }
 };
 
@@ -359,13 +570,16 @@ const loadEntities = async (search = '') => {
   try {
     const data = await request(`/api/entities?search=${encodeURIComponent(search)}`);
     if (!data.length) {
-      target.textContent = 'Nessuna entità trovata.';
+      target.textContent = t('graph.none');
+      target.className = 'hint';
       return;
     }
+    target.className = '';
     target.replaceChildren(...data.map(entity => {
-      const item = document.createElement('div');
-      item.className = 'source';
-      item.textContent = `${entity.name} (${entity.type}) — ${entity.mentions} menzioni`;
+      const item = el('div', {
+        className: 'source',
+        text: `${entity.name} (${entity.type}) — ${entity.mentions} ${t('graph.mentions')}`,
+      });
       item.style.cursor = 'pointer';
       item.addEventListener('click', () => loadEntityDetail(entity.id));
       return item;
@@ -378,8 +592,16 @@ document.getElementById('entity-search-form').addEventListener('submit', event =
   loadEntities(document.getElementById('entity-search').value.trim());
 });
 
-loadConfig();
+// --- avvio ------------------------------------------------------------------
+
+document.documentElement.lang = currentLanguage;
+applyTranslations();
+loadWorkspaces();
 loadSetup();
+loadConfig();
+loadSources();
+loadAvailableSources();
+loadDigests();
 loadRetention();
 loadIgnored();
 loadEntities();

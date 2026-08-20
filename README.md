@@ -126,6 +126,9 @@ docker compose up -d
 | `GNOSIS_CHAT_API_KEY` / `GNOSIS_CHAT_BASE_URL` | Yes | OpenAI-compatible chat provider (classification, RAG, digest). Point it at a free tier — OpenRouter, NVIDIA NIM, Groq — or OpenAI. Falls back to `OPENAI_API_KEY`/`OPENAI_BASE_URL` if unset |
 | `OPENAI_CHAT_MODEL` | Yes | Chat model name (set it to match whichever provider is used for chat) |
 | `OPENAI_API_KEY` | Only if `GNOSIS_EMBEDDING_PROVIDER=openai` or as chat fallback | OpenAI key, needed only when opting into OpenAI for embeddings or chat |
+| `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` | No | Fallback role allowlist. Prefer per-workspace roles, set from the dashboard |
+| `GNOSIS_DIGEST_DISCORD_WEBHOOK` | No | Fallback digest webhook, a single URL. Prefer the per-workspace one |
+| `GNOSIS_BOTS` | No | Other Prime Build bots as `id=url`, comma separated, so the dashboard can link them |
 | `GNOSIS_USERNAME` | Yes | Private web interface username |
 | `GNOSIS_PASSWORD` | Yes | Private web interface password |
 | `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | If enabled | Telegram client credentials |
@@ -176,12 +179,42 @@ The weekly digest can also be pushed automatically (instead of only on-demand) t
 
 ## 🛠️ Admin dashboard
 
-The web UI has **Impostazioni** (settings), **Stato** (status), and **Grafo** tabs alongside chat/digest/sources, so day-to-day administration doesn't require shell access to the host:
+The dashboard is an application shell, not a page of tabs: **platforms down the left rail, the server picker across the top**. Whatever you open, you are looking at it through the server selected up there.
 
-- **Sorgenti**: add sources or toggle them on/off from the UI. Toggling an existing source takes effect immediately (search/RAG already filter on it); a brand-new platform/source still needs a worker restart to start collecting.
-- **Impostazioni**: opens on a setup checklist showing what is configured, what is missing, which fields to fill, and a direct link to the page that issues each credential. Below it, edit provider keys/URLs (masked previews, only changed fields are saved), set a retention window (default: forever) or wipe all collected data, and manage a per-platform ignore-list for specific authors. Chat provider keys are applied to the running process immediately. Platform credentials and the embedding provider still need `docker compose restart worker`: they belong to the worker container, and the dashboard deliberately cannot restart containers — that would mean mounting the Docker socket, a privilege escalation this project does not take on by default.
-- **Stato**: connector health (per collector, reported by the worker's supervision loop), last activity per source, and raw token usage per model over the last 30 days — counts only, no cost estimate, since provider pricing changes too often to hardcode reliably.
-- **Grafo**: entities (people, tools, projects, organizations, concepts) and relationships extracted automatically from relevant messages, browsable and searchable. Every entity mention and relation links back to the source message — same "no claim without a citation" principle as chat and digests. It's plain Postgres tables (nodes/edges queried with SQL, no graph database), only for messages that already passed the relevance filter, and it's a standalone browsable feature — not yet wired into `/ask`'s answers.
+```
+┌──────────────┬──────────────────────────────────────┐
+│ 🧠 Gnosis    │  Context: [ Prime Build ▾ ]      🌐  │
+│ 🚪 Doorman   ├──────────────────────────────────────┤
+│ 🔐 D-View    │                                      │
+│ ──────────── │   Discord                            │
+│ ◎ Overview   │   ├ Credentials                      │
+│ 💬 Chat      │   ├ Server settings · Prime Build    │
+│ 📰 Digests   │   └ Channels read                    │
+│ 🕸 Graph     │                                      │
+│ ──────────── │                                      │
+│ 🎮 Discord ● │                                      │
+│ ✈ Telegram ○ │                                      │
+│ 👽 Reddit  ○ │                                      │
+└──────────────┴──────────────────────────────────────┘
+```
+
+- **Platforms** each get their own page: credentials, the settings that belong to the selected server (authorized roles, digest webhook), and the channels being read. The dot next to each one says whether it is configured and collecting.
+- **Sources** are picked from a dropdown of channels the bot can actually see; the worker publishes that list, so 19-digit IDs never have to be copied by hand. Each page states plainly that these are the channels Gnosis *reads*, while `/ask` works in any channel where the bot is present.
+- **Every field carries an `i` button** explaining what it does, where the value comes from, and what breaks without it.
+- **Overview** opens on a setup checklist plus what has been collected so far, counted for the selected server.
+- **Language**: English and Italian, guessed from the browser and switchable from the header. All strings live in `static/i18n.js`; the API returns data, never prose.
+- **Bots**: the other Prime Build bots appear in the rail, greyed out until reachable. Set `GNOSIS_BOTS=doorman=http://host:3000,dview=http://host:3001` and they turn into links. The dashboard shows the install command rather than running it — installing from a browser would mean handing the container the Docker socket, which is full control of the host.
+
+The frontend is dependency-free vanilla JS in four files: `i18n.js` (strings), `ui.js` (DOM helpers), `modules.js` (Gnosis pages), `shell.js` (rail, routing, server picker). Only `modules.js` knows anything about Gnosis, which is what makes the shell reusable.
+
+## 🗂️ Workspaces
+
+A workspace groups sources so a question can be answered from one server without dragging in the others. Without it, every answer and every digest mixes all configured sources together.
+
+- Pick the context from the selector in the header. Chat, digests, sources and stats all follow it; **All sources** stays available as an explicit choice.
+- Give a workspace the Discord server ID and `/ask` inside that server scopes itself automatically, using that workspace's authorized roles.
+- Each workspace has its own weekly digest and its own webhook, so two servers never share a destination.
+- In `config/sources.toml`, a source joins a workspace with `workspace = "Name"`. Sources without one stay reachable from the global context only.
 
 ## 🕸️ Knowledge graph
 

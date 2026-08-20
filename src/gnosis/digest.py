@@ -22,8 +22,10 @@ class DigestService:
         self.llm = llm
         self.zone = zone
 
-    async def generate(self, start: datetime, end: datetime) -> int | None:
-        messages = self.db.messages_between(start, end)
+    async def generate(
+        self, start: datetime, end: datetime, workspace_id: int | None = None
+    ) -> int | None:
+        messages = self.db.messages_between(start, end, workspace_id=workspace_id)
         if not messages:
             return None
         summaries: list[str] = []
@@ -51,5 +53,9 @@ class DigestService:
         if not valid_citations(markdown, {row["id"] for row in messages}):
             raise ValueError("Il digest generato non contiene citazioni valide")
         return self.db.save_digest(
-            start, end, markdown, len({row["source_name"] for row in messages})
+            start,
+            end,
+            markdown,
+            len({row["source_name"] for row in messages}),
+            workspace_id=workspace_id,
         )

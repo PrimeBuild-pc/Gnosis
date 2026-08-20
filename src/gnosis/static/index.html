@@ -1,118 +1,40 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gnosis</title>
+  <title>Gnosis — Prime Build</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header><h1>Gnosis</h1><p>Knowledge base privata con fonti verificabili</p></header>
-  <main>
-    <nav>
-      <button data-view="chat" class="active">Chat</button>
-      <button data-view="digests">Digest</button>
-      <button data-view="sources">Sorgenti</button>
-      <button data-view="settings">Impostazioni</button>
-      <button data-view="status">Stato</button>
-      <button data-view="graph">Grafo</button>
-    </nav>
-    <section id="chat" class="view active">
-      <form id="question-form">
-        <label for="question">Domanda</label>
-        <textarea id="question" maxlength="4000" required placeholder="Cosa è emerso questa settimana sulla sicurezza?"></textarea>
-        <button type="submit">Cerca nelle fonti</button>
-      </form>
-      <div id="answer" aria-live="polite"></div>
-    </section>
-    <section id="digests" class="view"><button id="refresh-digests">Aggiorna</button><div id="digest-list"></div></section>
+  <!-- Guscio applicativo: barra dei bot e delle sezioni a sinistra, contesto (server) in
+       alto, e un solo contenitore in cui il modulo attivo si disegna. Nessun contenuto
+       specifico di Gnosis vive qui dentro: lo iniettano i moduli. -->
+  <div class="app">
+    <div class="brand">
+      <span class="brand-mark" id="brand-mark">🧠</span>
+      <span class="brand-name" id="brand-name">Gnosis</span>
+    </div>
 
-    <section id="sources" class="view">
-      <button id="refresh-sources">Aggiorna</button>
-      <div id="source-list"></div>
-      <h3>Aggiungi o aggiorna sorgente</h3>
-      <p class="hint">Una sorgente nuova (piattaforma mai abilitata prima) richiede un riavvio del worker per iniziare la raccolta. Abilitare/disabilitare una sorgente già esistente ha effetto immediato sulle risposte.</p>
-      <form id="source-form">
-        <label for="source-platform">Piattaforma</label>
-        <select id="source-platform" required>
-          <option value="telegram">Telegram</option>
-          <option value="discord">Discord</option>
-          <option value="reddit">Reddit</option>
-        </select>
-        <label for="source-id">ID (chat_id / channel_id / subreddit)</label>
-        <input id="source-id" required>
-        <label for="source-name">Nome</label>
-        <input id="source-name">
-        <label><input type="checkbox" id="source-enabled" checked> Abilitata</label>
-        <label for="source-topics">Argomenti (separati da virgola)</label>
-        <input id="source-topics" placeholder="AI, security">
-        <button type="submit">Salva sorgente</button>
-      </form>
-      <div id="source-form-result"></div>
-    </section>
+    <div class="topbar">
+      <div class="server-picker">
+        <span data-i18n="workspace.label"></span>
+        <select id="workspace-select"></select>
+      </div>
+      <span class="topbar-spacer"></span>
+      <select id="language-select" aria-label="Language"></select>
+    </div>
 
-    <section id="settings" class="view">
-      <h3>Stato configurazione</h3>
-      <p class="hint">Serve solo il provider chat per iniziare. Le piattaforme sono facoltative e si aggiungono quando vuoi: ognuna richiede le sue credenziali qui sotto e almeno una sorgente nel tab Sorgenti.</p>
-      <div id="setup-steps"></div>
+    <nav class="rail" id="rail"></nav>
 
-      <h3>Provider e chiavi</h3>
-      <p class="hint">I campi mostrano solo un'anteprima mascherata del valore attuale. Lascia vuoto un campo per non modificarlo. Le chiavi del provider chat valgono subito; quelle delle piattaforme richiedono <code>docker compose restart worker</code>.</p>
-      <form id="config-form">
-        <div id="config-fields"></div>
-        <button type="submit">Salva configurazione</button>
-      </form>
-      <div id="config-result"></div>
+    <main class="main">
+      <div class="module" id="module"></div>
+    </main>
+  </div>
 
-      <h3>Conservazione dati</h3>
-      <form id="retention-form">
-        <label for="retention-days">Elimina messaggi più vecchi di (giorni, vuoto = per sempre)</label>
-        <input id="retention-days" type="number" min="1" placeholder="per sempre">
-        <button type="submit">Salva conservazione</button>
-      </form>
-      <div id="retention-result"></div>
-
-      <h3>Cancella memoria</h3>
-      <p class="hint">Elimina definitivamente tutti i messaggi, i chunk e i digest raccolti. Le sorgenti configurate restano.</p>
-      <button id="wipe-button" class="danger">Cancella tutta la memoria</button>
-      <div id="wipe-result"></div>
-
-      <h3>Utenti ignorati</h3>
-      <div id="ignored-list"></div>
-      <form id="ignore-form">
-        <label for="ignore-platform">Piattaforma</label>
-        <select id="ignore-platform" required>
-          <option value="telegram">Telegram</option>
-          <option value="discord">Discord</option>
-          <option value="reddit">Reddit</option>
-        </select>
-        <label for="ignore-author">ID autore</label>
-        <input id="ignore-author" required>
-        <button type="submit">Ignora utente</button>
-      </form>
-    </section>
-
-    <section id="status" class="view">
-      <button id="refresh-status">Aggiorna</button>
-      <h3>Connettori</h3>
-      <div id="worker-status"></div>
-      <h3>Sorgenti</h3>
-      <div id="source-status"></div>
-      <h3>Utilizzo (ultimi 30 giorni)</h3>
-      <p class="hint">Conteggi token grezzi: nessuna stima di costo, i prezzi variano per provider e modello.</p>
-      <div id="usage-status"></div>
-    </section>
-
-    <section id="graph" class="view">
-      <p class="hint">Entità e relazioni estratte automaticamente dai messaggi rilevanti. Ogni menzione e relazione resta collegata al messaggio da cui è stata estratta.</p>
-      <form id="entity-search-form">
-        <input id="entity-search" placeholder="Cerca entità (es. nome strumento, persona, progetto)">
-        <button type="submit">Cerca</button>
-      </form>
-      <div id="entity-list"></div>
-      <div id="entity-detail"></div>
-    </section>
-  </main>
-  <script src="/app.js" defer></script>
+  <script src="/i18n.js" defer></script>
+  <script src="/ui.js" defer></script>
+  <script src="/modules.js" defer></script>
+  <script src="/shell.js" defer></script>
 </body>
 </html>
