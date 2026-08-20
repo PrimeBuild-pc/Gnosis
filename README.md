@@ -157,7 +157,10 @@ gnosis worker
 gnosis web
 gnosis digest
 gnosis prune --before 2025-01-01
+gnosis selfcheck
 ```
+
+`selfcheck` runs the real queries against the configured database — workspaces, sources, scoped and unscoped search, digests, stats — on temporary rows it cleans up afterwards, and exits non-zero if anything fails. The API tests use a fake database, so they cannot tell whether a query is actually valid for PostgreSQL; this closes that gap.
 
 Connectors backfill the latest 200 accessible items, then continue through real-time events or polling. Repeated ingestion is safe and does not duplicate platform messages.
 

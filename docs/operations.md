@@ -9,6 +9,20 @@ docker compose logs -f web
 curl http://127.0.0.1:8080/health
 ```
 
+## Controllo di salute
+
+```bash
+docker compose run --rm web gnosis selfcheck
+```
+
+Esegue le query vere contro il database configurato — workspace, sorgenti, ricerca con e
+senza contesto, digest, statistiche — creando dati temporanei con prefisso `__selfcheck__`
+e rimuovendoli alla fine. Esce con codice diverso da zero se qualcosa fallisce.
+
+Serve perche' i test dell'API usano un database finto: sono veloci ma non si accorgono se
+una query non e' valida per Postgres. Un bug di questo tipo e' gia' arrivato in produzione
+(un `coalesce` senza cast su una colonna `text[]`), e questo controllo lo intercetta.
+
 ## Backup
 
 ```bash
