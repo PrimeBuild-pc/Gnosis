@@ -12,6 +12,7 @@ from .config import Settings
 from .db import Database
 from .digest import DigestService, previous_week
 from .llm import LLM
+from .selfcheck import run as run_selfcheck
 from .worker import run_worker
 
 
@@ -29,6 +30,9 @@ def main() -> None:
     subcommands.add_parser("worker", help="Avvia connettori, pipeline e scheduler")
     subcommands.add_parser("telegram-login", help="Crea la sessione Telegram")
     subcommands.add_parser("digest", help="Genera il digest della settimana precedente")
+    subcommands.add_parser(
+        "selfcheck", help="Verifica che le query funzionino sul database configurato"
+    )
     prune = subcommands.add_parser("prune", help="Elimina messaggi più vecchi della data")
     prune.add_argument("--before", required=True, help="Data UTC YYYY-MM-DD")
     args = parser.parse_args()
@@ -38,7 +42,15 @@ def main() -> None:
     )
     settings = Settings.from_env()
 
-    if args.command == "web":
+    if args.command == "selfcheck":
+        results = run_selfcheck(settings)
+        for name, ok, detail in results:
+            print(f"{'OK  ' if ok else 'FALLITO'} {name}{f' — {detail}' if detail else ''}")
+        failed = [name for name, ok, _ in results if not ok]
+        if failed:
+            raise SystemExit(f"{len(failed)} controlli falliti")
+        print(f"{len(results)} controlli superati")
+    elif args.command == "web":
         uvicorn.run("gnosis.api:create_app", factory=True, host=settings.host, port=settings.port)
     elif args.command == "worker":
         asyncio.run(run_worker())
