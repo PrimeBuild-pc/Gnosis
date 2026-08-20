@@ -292,6 +292,7 @@ The CI workflow runs linting, tests, and a Docker image build on every push and 
 ## Documentation
 
 - [Product brief](docs/product-brief.md)
+- [Dashboard shell](docs/dashboard-shell.md) — how the shell is built and what to share with the other bots
 - [Platform setup](docs/setup-platforms.md)
 - [Operations, backup, and retention](docs/operations.md)
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
