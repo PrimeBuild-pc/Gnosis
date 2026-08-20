@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="687" height="100"
+     viewBox="0 0 687 100" role="img"
+     aria-label="in development...">
+  <title>in development...</title>
+  <style>
+    .tw-text, .tw-caret { fill: #d97706; }
+    .tw-text {
+      font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Consolas",
+                   "Liberation Mono", "Menlo", monospace;
+      font-size: 64px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    @media (prefers-color-scheme: dark) {
+      .tw-text, .tw-caret { fill: #fbbf24; }
+    }
+  </style>
+
+  <defs>
+    <clipPath id="tw-reveal">
+      <rect x="14" y="0" width="0" height="100">
+        <animate attributeName="width"
+                 values="0.0;38.0;76.0;114.0;152.0;190.0;228.0;266.0;304.0;342.0;380.0;418.0;456.0;494.0;532.0;570.0;608.0;646.0;646.0;608.0;570.0;532.0;494.0;456.0;418.0;380.0;342.0;304.0;266.0;228.0;190.0;152.0;114.0;76.0;38.0;0.0;0.0"
+                 keyTimes="0.00000;0.01820;0.03639;0.05459;0.07279;0.09098;0.10918;0.12738;0.14557;0.16377;0.18197;0.20017;0.21836;0.23656;0.25476;0.27295;0.29115;0.30935;0.32754;0.75765;0.76510;0.77254;0.77998;0.78743;0.79487;0.80232;0.80976;0.81720;0.82465;0.83209;0.83954;0.84698;0.85443;0.86187;0.86931;0.87676;0.88420"
+                 dur="6.04s"
+                 calcMode="discrete"
+                 repeatCount="indefinite" />
+      </rect>
+    </clipPath>
+  </defs>
+
+  <text class="tw-text" x="14" y="67.9"
+        textLength="646.0" lengthAdjust="spacingAndGlyphs"
+        clip-path="url(#tw-reveal)">in development...</text>
+
+  <rect class="tw-caret" y="24" width="7" height="58"
+        x="14">
+    <animate attributeName="x"
+             values="14.0;52.0;90.0;128.0;166.0;204.0;242.0;280.0;318.0;356.0;394.0;432.0;470.0;508.0;546.0;584.0;622.0;660.0;660.0;622.0;584.0;546.0;508.0;470.0;432.0;394.0;356.0;318.0;280.0;242.0;204.0;166.0;128.0;90.0;52.0;14.0;14.0"
+             keyTimes="0.00000;0.01820;0.03639;0.05459;0.07279;0.09098;0.10918;0.12738;0.14557;0.16377;0.18197;0.20017;0.21836;0.23656;0.25476;0.27295;0.29115;0.30935;0.32754;0.75765;0.76510;0.77254;0.77998;0.78743;0.79487;0.80232;0.80976;0.81720;0.82465;0.83209;0.83954;0.84698;0.85443;0.86187;0.86931;0.87676;0.88420"
+             dur="6.04s"
+             calcMode="discrete"
+             repeatCount="indefinite" />
+    <animate attributeName="opacity"
+             values="1;1;0;0;1"
+             keyTimes="0;0.45;0.5;0.95;1"
+             dur="1.05s"
+             repeatCount="indefinite" />
+  </rect>
+</svg>
