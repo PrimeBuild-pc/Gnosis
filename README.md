@@ -7,16 +7,20 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/python-3.11%2B-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
-  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=git&amp;logoColor=white"></a>
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/self--hosted-no%20cloud%2C%20no%20tracking-2dd4a7?style=for-the-badge" alt="Self-hosted">
-  <img src="https://img.shields.io/badge/privacy-first-2dd4a7?style=for-the-badge" alt="Privacy-first">
-  <img src="https://img.shields.io/badge/cost-zero-2dd4a7?style=for-the-badge" alt="Zero cost">
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/PrimeBuild-pc/Gnosis/ci.yml?branch=main&amp;style=plastic&amp;logo=githubactions&amp;label=CI"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2ea44f?style=plastic"></a>
+  <img src="https://img.shields.io/badge/self--hosted-no%20cloud%2C%20no%20tracking-2dd4a7?style=plastic" alt="Self-hosted">
+  <img src="https://img.shields.io/badge/privacy-first-2dd4a7?style=plastic" alt="Privacy-first">
+  <img src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=plastic&amp;logo=python&amp;logoColor=white" alt="Python 3.11 or newer">
+  <img src="https://img.shields.io/badge/FastAPI-API-009688?style=plastic&amp;logo=fastapi&amp;logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=plastic&amp;logo=postgresql&amp;logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=plastic&amp;logo=docker&amp;logoColor=white" alt="Docker Compose">
 </p>
 
 <p align="center"><i>A private, source-grounded knowledge base for Telegram, Discord, and Reddit. Collect authorized community content, filter noise, generate weekly digests, and ask questions with citations back to the original messages.</i></p>
