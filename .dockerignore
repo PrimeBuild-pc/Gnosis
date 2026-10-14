@@ -10,3 +10,12 @@ __pycache__
 .ruff_cache
 data
 *.session*
+.verification
+.claude/settings.local.json
+**/*.egg-info
+build
+dist
+.coverage*
+coverage.xml
+htmlcov
+**/*.log

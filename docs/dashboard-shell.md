@@ -1,80 +1,39 @@
-# Il guscio della dashboard, e come condividerlo fra i tre bot
+# Architettura della dashboard
 
-Questa nota descrive com'è fatta la dashboard di Gnosis e cosa conviene davvero condividere
-con Doorman e D-View. È una nota di progetto, non una guida operativa.
+Gnosis serve una dashboard FastAPI con HTML/CSS/JavaScript vanilla, senza framework
+frontend o build dedicata. `src/gnosis/static/index.html` carica i quattro script in
+ordine; `tests/frontend.cjs` verifica anche che non vengano distribuiti bundle obsoleti.
 
-## Com'è fatta
+| File in `src/gnosis/static/` | Responsabilità |
+|---|---|
+| `index.html` | Struttura iniziale, landmark, caricamento CSS e script |
+| `i18n.js` | Stringhe e selezione lingua italiano/inglese |
+| `ui.js` | Helper DOM, campi, messaggi e validazione dei link |
+| `modules.js` | Pagine chat, digest, piattaforme, stato e impostazioni |
+| `shell.js` | Sidebar, routing per hash, workspace e collegamenti agli altri bot |
+| `style.css` | Token di colore, layout, componenti e stati accessibili |
 
-Quattro file in `src/gnosis/static/`, senza dipendenze e senza toolchain:
+Il registro `GNOSIS_MODULES` definisce le pagine e i gruppi `bot`, `platforms`,
+`system`. Il DOM viene costruito con `createElement` e `textContent`: contenuti delle
+piattaforme e output del modello sono dati non fidati, non HTML da eseguire.
 
-| File | Responsabilità | Specifico di Gnosis? |
-|---|---|---|
-| `shell.js` | barra laterale, routing per hash, selettore del server, cambio lingua, elenco bot | no |
-| `ui.js` | helper DOM, campi con pulsante informativo, righe di elenco, stato del contesto | no |
-| `style.css` | token di colore, griglia dell'applicazione, componenti | no |
-| `i18n.js` | tutte le stringhe, inglese e italiano | sì, nei testi |
-| `modules.js` | le pagine: chat, digest, piattaforme, stato, impostazioni | sì |
+## Contratto backend
 
-Il guscio non sa cosa sia Gnosis. Legge un registro di moduli:
+- `GET /api/bots`: applicazione corrente e bot configurati con `GNOSIS_BOTS`.
+  Il backend verifica la raggiungibilità; il browser apre il collegamento indicato.
+- `GET /api/workspaces`: workspace per il selettore di contesto.
+- `GET /api/setup`: stato della configurazione, con testi di aiuto gestiti da `i18n.js`.
 
-```js
-{id: 'discord', group: 'platforms', icon: '🎮', labelKey: 'section.discord',
- platform: 'discord', render: container => { /* disegna la pagina */ }}
-```
+API, dashboard e asset richiedono l'autenticazione admin; `/health` è pubblico.
+L'amministratore è un operatore fidato globale: il selettore workspace è un filtro,
+non una separazione di privilegi. Anche il grafo resta globale.
 
-e li dispone in tre gruppi (`bot`, `platforms`, `system`). Cambiare `modules.js` cambia
-l'intera applicazione: è l'unico punto di contatto.
+## Collegamenti a Doorman e D-View
 
-Il contratto che il backend deve rispettare è ristretto:
+Le due applicazioni sono Next.js con login Discord OAuth, non moduli di Gnosis.
+`GNOSIS_BOTS` permette di collegare installazioni già esistenti; non condivide sessioni,
+credenziali o permessi. Passare a un altro bot apre una nuova scheda.
 
-- `GET /api/bots` — i bot affiancati, con `installed` e `current`
-- `GET /api/workspaces` — i server, per il selettore in alto
-- `GET /api/setup` — cosa è pronto e cosa manca, **solo dati**: le spiegazioni stanno in `i18n.js`
-
-## Cosa condividere davvero
-
-Doorman e D-View **non** sono nella stessa situazione di Gnosis, e conviene dirlo prima di
-copiare file:
-
-- entrambi sono **Next.js**, non pagine statiche;
-- entrambi hanno già il **login Discord OAuth** e pagine `/guilds/[guildId]/…`, cioè hanno
-  già il modello "scegli il server, poi vedi le sue cose";
-- Gnosis è FastAPI con HTTP Basic, e serve file statici.
-
-Quindi la mossa sbagliata è portare `shell.js` dentro Next.js e riscrivere due interfacce
-funzionanti. Si perderebbe l'autenticazione OAuth per guadagnare uniformità estetica.
-
-**Da condividere: `style.css`.** È scritto apposta senza framework e senza `@import`: token
-di colore, griglia, `.card`, `.list-row`, `.rail-item`, `.field`. Importarlo in
-`apps/web/src/app/globals.css` fa sì che i tre bot sembrino lo stesso prodotto pur restando
-tre applicazioni diverse. Le classi sono nomi normali, non moduli CSS, quindi funzionano
-identiche in JSX.
-
-**Da replicare, non copiare: la struttura.** Barra laterale a sinistra con i tre bot in
-cima, selettore del server in alto, gruppi `bot` / `platforms` / `system`. In Next.js si
-esprime con un `layout.tsx` invece che con `shell.js`, ma è la stessa gerarchia.
-
-**Da condividere davvero come codice: `GET /api/bots`.** Sono venti righe per applicazione e
-sono ciò che rende il gruppo un gruppo: ogni bot dichiara gli altri due, prova a
-raggiungerli, e mostra grigio ciò che non risponde. Il probe va fatto lato server, non dal
-browser: da JavaScript il CORS non lascia distinguere "spento" da "raggiungibile ma di
-un'altra origine".
-
-## Perché l'installazione non parte dal browser
-
-La pagina di un bot non installato mostra il comando, non lo esegue. Eseguirlo vorrebbe dire
-montare il socket Docker nel container della dashboard, cioè dare a un'applicazione esposta
-via web il controllo completo della macchina. Per un progetto self-hosted che gira sulla VM
-personale di qualcun altro non è uno scambio accettabile di default.
-
-L'alternativa onesta è quella implementata: se il bot è già installato altrove, lo si dichiara
-in `GNOSIS_BOTS` e smette di essere grigio.
-
-## Limiti attuali, dichiarati
-
-- Il selettore in alto elenca i **workspace di Gnosis**, non i server Discord in assoluto: un
-  server esiste nell'elenco solo dopo che gli è stato assegnato almeno una sorgente o è stato
-  creato a mano.
-- Passare da un bot all'altro apre una scheda nuova. Un'unica sessione condivisa fra tre
-  applicazioni con tre modelli di autenticazione diversi è un problema a sé.
-- Il grafo delle entità resta globale, non filtrato per server.
+La dashboard mostra istruzioni per installare un bot assente, ma non esegue comandi
+sull'host e non monta il socket Docker. L'installazione e le operazioni autorizzate
+restano descritte nel [README](../README.md) e nella [guida operativa](operations.md).
