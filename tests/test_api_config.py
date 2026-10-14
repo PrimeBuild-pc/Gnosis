@@ -3,6 +3,7 @@ dalla dashboard deve applicarla al processo in corso senza riavviare il containe
 
 import os
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -107,7 +108,7 @@ def test_saving_key_applies_without_restart(client):
     )
     assert response.status_code == 200
     assert response.json()["restart_required"] is False
-    assert "GNOSIS_CHAT_API_KEY=chiave-nuova" in env_path.read_text(encoding="utf-8")
+    assert 'GNOSIS_CHAT_API_KEY="chiave-nuova"' in env_path.read_text(encoding="utf-8")
     assert test_client.app.state.llm.chat_api_key == "chiave-nuova"
 
 
@@ -206,6 +207,124 @@ def test_bots_lists_the_catalog_with_current_flagged(client):
     assert bots["doorman"]["installed"] is False
     assert bots["doorman"]["repo"].endswith("/Doorman")
     assert bots["doorman"]["install"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/",
+        "/docs",
+        "/openapi.json",
+        "/ui.js",
+        "/api/config",
+        "/api/workspaces",
+        "/api/sources",
+        "/api/entities",
+        "/api/status",
+        "/api/usage",
+    ],
+)
+def test_all_private_routes_require_auth(client, path):
+    test_client, _ = client
+    assert test_client.get(path).status_code == 401
+    assert test_client.get(path, auth=("admin", "wrong")).status_code == 401
+
+
+@pytest.mark.parametrize(
+    "method,path,payload",
+    [
+        ("POST", "/api/config", {"values": {"DISCORD_BOT_TOKEN": "x"}}),
+        ("POST", "/api/workspaces", {"name": "X"}),
+        ("DELETE", "/api/workspaces/1", None),
+        ("POST", "/api/wipe", {"confirm": "WIPE"}),
+    ],
+)
+def test_mutations_reject_cross_origin_even_with_admin_auth(client, method, path, payload):
+    test_client, env_path = client
+    before = env_path.read_text(encoding="utf-8")
+    response = test_client.request(
+        method, path, json=payload, auth=AUTH, headers={"Origin": "https://evil.example"}
+    )
+    assert response.status_code == 403
+    assert env_path.read_text(encoding="utf-8") == before
+
+
+def test_same_origin_update_and_no_store(client):
+    test_client, _ = client
+    response = test_client.post(
+        "/api/config",
+        json={"values": {"OPENAI_CHAT_MODEL": "local"}},
+        auth=AUTH,
+        headers={"Origin": "http://testserver"},
+    )
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"DISCORD_BOT_TOKEN": "x\nGNOSIS_PASSWORD=bad"},
+        {"TELEGRAM_API_ID": "invalid"},
+        {"GNOSIS_TELEGRAM_ALLOWED_USERS": "1,invalid"},
+        {"GNOSIS_EMBEDDING_PROVIDER": "invalid"},
+    ],
+)
+def test_bad_config_does_not_persist(client, values):
+    test_client, env_path = client
+    before = env_path.read_text(encoding="utf-8")
+    response = test_client.post("/api/config", json={"values": values}, auth=AUTH)
+    assert response.status_code in {400, 422}
+    assert env_path.read_text(encoding="utf-8") == before
+
+
+def test_webhook_and_api_keys_are_not_returned(client):
+    test_client, _ = client
+    response = test_client.post(
+        "/api/workspaces",
+        auth=AUTH,
+        json={"name": "A", "digest_webhook": "https://discord.com/api/webhooks/1/secret"},
+    )
+    assert response.json()["workspaces"][0]["digest_webhook"] == "********"
+    assert "secret" not in test_client.get("/api/workspaces", auth=AUTH).text
+    test_client.post("/api/config", auth=AUTH, json={"values": {"GNOSIS_CHAT_API_KEY": "abc"}})
+    fields = {row["key"]: row for row in test_client.get("/api/config", auth=AUTH).json()}
+    assert fields["GNOSIS_CHAT_API_KEY"]["value"] == "********"
+
+
+@pytest.mark.parametrize("path", ["/api/chat", "/api/search"])
+def test_unknown_workspace_and_blank_question_are_rejected(client, path):
+    test_client, _ = client
+    assert test_client.post(path, auth=AUTH, json={"question": "   "}).status_code == 422
+    response = test_client.post(path, auth=AUTH, json={"question": "x", "workspace_id": 99})
+    assert response.status_code == 404
+
+
+def test_default_password_cannot_start(monkeypatch):
+    monkeypatch.setenv("GNOSIS_USERNAME", "admin")
+    monkeypatch.setenv("GNOSIS_PASSWORD", "change-me")
+    with pytest.raises(RuntimeError):
+        create_app()
+
+
+def test_global_manual_digest_never_pushes_to_a_server_when_workspaces_exist(client, monkeypatch):
+    test_client, _ = client
+    test_client.app.state.db.workspaces = [{"id": 1, "name": "A"}]
+    test_client.app.state.digest.generate = AsyncMock(return_value=12)
+    push = AsyncMock()
+    monkeypatch.setattr("gnosis.api.push_digest", push)
+    response = test_client.post("/api/digests/run", auth=AUTH)
+    assert response.status_code == 200
+    push.assert_not_called()
+
+
+def test_invalid_role_id_is_rejected(client):
+    test_client, _ = client
+    response = test_client.post(
+        "/api/workspaces", auth=AUTH, json={"name": "A", "allowed_role_ids": ["not-id"]}
+    )
+    assert response.status_code == 422
 
 
 def test_unreachable_bot_stays_not_installed(client, monkeypatch: pytest.MonkeyPatch):

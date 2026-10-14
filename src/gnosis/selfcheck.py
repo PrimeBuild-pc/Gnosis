@@ -11,21 +11,24 @@ prefisso riconoscibile e li rimuove alla fine, senza toccare quelli reali.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
-from .config import Settings, SourceConfig
+from .config import Settings
 from .db import Database
+from .types import CollectedMessage
 
 PREFIX = "__selfcheck__"
 
 
-def _cleanup(db: Database) -> None:
+def _cleanup(db: Database, prefix: str) -> None:
     with db.connection() as connection:
-        connection.execute("DELETE FROM sources WHERE external_id LIKE %s", (f"{PREFIX}%",))
-        connection.execute("DELETE FROM workspaces WHERE name LIKE %s", (f"{PREFIX}%",))
+        connection.execute("DELETE FROM sources WHERE starts_with(external_id, %s)", (prefix,))
+        connection.execute("DELETE FROM workspaces WHERE starts_with(name, %s)", (prefix,))
 
 
 def run(settings: Settings) -> list[tuple[str, bool, str]]:
     """Restituisce (nome del controllo, esito, dettaglio). Non solleva: raccoglie."""
+    prefix = f"{PREFIX}{uuid4().hex}_"
     results: list[tuple[str, bool, str]] = []
     db = Database(settings.database_url)
     db.open()
@@ -46,17 +49,18 @@ def run(settings: Settings) -> list[tuple[str, bool, str]]:
         return value
 
     try:
-        _cleanup(db)
-
         # Il caso che era rotto: campi facoltativi a None su una colonna text[].
         workspace_id = check(
             "creazione workspace (campi facoltativi vuoti)",
-            lambda: db.upsert_workspace(name=f"{PREFIX}A", platform="discord"),
+            lambda: db.upsert_workspace(name=f"{prefix}A", platform="discord"),
         )
+        if workspace_id is None:
+            return results
         check(
             "aggiornamento workspace (ruoli e webhook)",
             lambda: db.upsert_workspace(
-                name=f"{PREFIX}A",
+                name=f"{prefix}A",
+                external_id=prefix,
                 allowed_role_ids=["1", "2"],
                 digest_webhook="https://example.invalid/webhook",
             ),
@@ -67,26 +71,73 @@ def run(settings: Settings) -> list[tuple[str, bool, str]]:
             lambda: db.workspace_for_external_id("discord", "assente"),
         )
 
-        check(
-            "sorgente con workspace",
-            lambda: db.upsert_sources(
-                [
-                    SourceConfig(
-                        platform="discord",
-                        external_id=f"{PREFIX}1",
-                        name=f"{PREFIX}canale",
-                        topics=("test",),
-                        workspace=f"{PREFIX}A",
-                    )
-                ]
+        # upsert_sources replaces the live allowlist: selfcheck must never call it.
+        with db.connection() as connection:
+            source_id = connection.execute(
+                "INSERT INTO sources (platform, external_id, name, workspace_id) "
+                "VALUES ('discord', %s, %s, %s) RETURNING id",
+                (f"{prefix}1", f"{prefix}canale", workspace_id),
+            ).fetchone()["id"]
+        vector = [1.0] + [0.0] * (settings.embedding_dimensions - 1)
+        message_id = db.save_message(
+            source_id,
+            CollectedMessage(
+                platform="discord",
+                source_external_id=f"{prefix}1",
+                external_id="1",
+                author="selfcheck",
+                sent_at=datetime.now(UTC),
+                text=prefix,
+                url="",
+                metadata={"guild_id": prefix},
             ),
+            prefix,
         )
+        db.finish_message(message_id, 1.0, [], "test", [(prefix, vector)])
 
-        vector = [0.0] * settings.embedding_dimensions
+        def assert_scope():
+            rows = db.search(
+                prefix,
+                vector,
+                workspace_id=workspace_id,
+                discord_guild_id=prefix,
+                source_external_ids=[f"{prefix}1"],
+            )
+            assert {row["message_id"] for row in rows} == {message_id}
+            assert not db.search(
+                prefix,
+                vector,
+                workspace_id=workspace_id,
+                discord_guild_id="other-guild",
+                source_external_ids=[f"{prefix}1"],
+            )
+            assert not db.search(
+                prefix,
+                vector,
+                workspace_id=workspace_id,
+                discord_guild_id=prefix,
+                source_external_ids=[],
+            )
+            assert db.accessible_discord_messages(
+                {message_id}, workspace_id, prefix, [f"{prefix}1"]
+            ) == {message_id}
+
+        check("isolamento Discord e citazioni digest", assert_scope)
         check("ricerca senza contesto", lambda: db.search("prova", vector))
         check("ricerca con contesto", lambda: db.search("prova", vector, workspace_id=workspace_id))
 
         now = datetime.now(UTC)
+        check(
+            "salvataggio digest con provenienza",
+            lambda: db.save_digest(
+                now,
+                now,
+                f"Selfcheck [M{message_id}]",
+                1,
+                workspace_id=workspace_id,
+                message_ids=[message_id],
+            ),
+        )
         check(
             "messaggi per il digest, con contesto",
             lambda: db.messages_between(now - timedelta(days=7), now, workspace_id=workspace_id),
@@ -100,7 +151,7 @@ def run(settings: Settings) -> list[tuple[str, bool, str]]:
             check("eliminazione workspace", lambda: db.delete_workspace(workspace_id))
     finally:
         try:
-            _cleanup(db)
+            _cleanup(db, prefix)
         finally:
             db.close()
     return results

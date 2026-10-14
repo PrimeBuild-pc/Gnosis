@@ -3,6 +3,7 @@
 // sparpagliano fra Python e JavaScript. L'inglese e il fallback di ogni chiave mancante.
 const I18N = {
   en: {
+    'a11y.skip': 'Skip to content',
     'app.tagline': 'Private knowledge base with verifiable sources',
     'nav.chat': 'Chat',
     'nav.digests': 'Digests',
@@ -18,7 +19,7 @@ const I18N = {
     'workspace.create': 'New workspace',
     'workspace.name': 'Name',
     'workspace.platform': 'Platform',
-    'workspace.externalId': 'Discord server ID (optional)',
+    'workspace.externalId': 'Discord server ID (required for commands)',
     'workspace.externalIdHelp': 'With this set, /ask inside that server automatically answers using only its channels, and the roles below apply there.',
     'workspace.roles': 'Authorized role IDs (comma separated)',
     'workspace.rolesHelp': 'Only members holding one of these roles can use /ask and /digest in this server. Enable Developer Mode in Discord, then right-click a role to copy its ID.',
@@ -47,7 +48,7 @@ const I18N = {
     'sources.commandNote': 'The /ask and /digest commands are a different thing: they work in any channel where the bot is present, for anyone holding an authorized role. You do not list them here.',
     'sources.refresh': 'Refresh',
     'sources.addTitle': 'Add or update a source',
-    'sources.restartNote': 'A brand-new platform needs a worker restart before collection starts. Enabling or disabling an existing source takes effect immediately.',
+    'sources.restartNote': 'Restart the worker after changing sources. Disabled sources are immediately excluded from search, but the collector reloads at restart.',
     'sources.platform': 'Platform',
     'sources.pick': 'Channel',
     'sources.pickPlaceholder': 'Choose a channel…',
@@ -73,12 +74,12 @@ const I18N = {
     'settings.maskNote': 'Fields show a masked preview of the current value. Leave one empty to keep it unchanged.',
     'settings.save': 'Save',
     'settings.savedLive': 'Saved and applied immediately.',
-    'settings.savedRestart': 'Saved. Run docker compose restart worker to apply.',
+    'settings.savedRestart': 'Saved. Run docker compose up -d --force-recreate web worker to reload environment and sources.',
     'settings.noChange': 'Nothing to save.',
     'settings.info': 'What is this?',
 
     'section.llm': 'Language model',
-    'section.llm.intro': 'Any OpenAI-compatible endpoint works, including a local one: Ollama (http://host.docker.internal:11434/v1) or LM Studio. Embeddings always run locally and never need a key.',
+    'section.llm.intro': 'Use an OpenAI-compatible chat endpoint, including your own local server (see README for Docker networking). Embeddings default to local; openai requires an API key.',
     'section.discord': 'Discord',
     'section.discord.intro': 'One bot serves every server you invite it to. Per-server settings live in the Workspaces section below.',
     'section.telegram': 'Telegram',
@@ -89,7 +90,7 @@ const I18N = {
     'section.workspaces.intro': 'A workspace groups sources so you can query one server without mixing in the others. Each has its own authorized roles and its own digest destination.',
 
     'setup.chat': 'Chat provider',
-    'setup.chat.hint': 'An OpenAI-compatible key. Free tiers: OpenRouter (models suffixed :free), Groq, NVIDIA NIM. Embeddings stay local and cost nothing.',
+    'setup.chat.hint': 'An OpenAI-compatible API or a local model server. Provider quotas, pricing and models change. A coding-agent subscription is not API credit.',
     'setup.discord': 'Discord',
     'setup.discord.hint': 'Developer Portal, create an application with a bot: enable the Message Content intent, and invite it with both the bot and applications.commands scopes.',
     'setup.telegram': 'Telegram',
@@ -192,7 +193,7 @@ const I18N = {
 
     'sources.enable': 'Enable',
     'sources.disable': 'Disable',
-    'sources.saved': 'Source saved.',
+    'sources.saved': 'Source saved. Restart the worker to reload the channel allowlist.',
     'sources.noTopics': 'no topics — nothing will pass the filter',
     'sources.pickFound': '{n} channels found.',
     'sources.redditManual': 'Enter the subreddit name without r/.',
@@ -214,6 +215,7 @@ const I18N = {
   },
 
   it: {
+    'a11y.skip': 'Vai al contenuto',
     'app.tagline': 'Knowledge base privata con fonti verificabili',
     'nav.chat': 'Chat',
     'nav.digests': 'Digest',
@@ -229,7 +231,7 @@ const I18N = {
     'workspace.create': 'Nuovo workspace',
     'workspace.name': 'Nome',
     'workspace.platform': 'Piattaforma',
-    'workspace.externalId': 'ID del server Discord (facoltativo)',
+    'workspace.externalId': 'ID del server Discord (obbligatorio per i comandi)',
     'workspace.externalIdHelp': 'Impostandolo, /ask dentro quel server risponde automaticamente usando solo i suoi canali, e i ruoli qui sotto valgono li.',
     'workspace.roles': 'ID ruoli autorizzati (separati da virgola)',
     'workspace.rolesHelp': "Solo chi ha uno di questi ruoli può usare /ask e /digest in questo server. Attiva la modalità sviluppatore in Discord, poi tasto destro sul ruolo per copiarne l'ID.",
@@ -258,7 +260,7 @@ const I18N = {
     'sources.commandNote': "I comandi /ask e /digest sono un'altra cosa: funzionano in qualsiasi canale dove il bot è presente, per chi ha un ruolo autorizzato. Non vanno elencati qui.",
     'sources.refresh': 'Aggiorna',
     'sources.addTitle': 'Aggiungi o aggiorna sorgente',
-    'sources.restartNote': 'Una piattaforma mai usata prima richiede un riavvio del worker per iniziare la raccolta. Abilitare o disabilitare una sorgente esistente ha effetto immediato.',
+    'sources.restartNote': 'Riavvia il worker dopo aver modificato le sorgenti. Le sorgenti disabilitate spariscono subito dalla ricerca; il collector si aggiorna al riavvio.',
     'sources.platform': 'Piattaforma',
     'sources.pick': 'Canale',
     'sources.pickPlaceholder': 'Scegli un canale…',
@@ -284,12 +286,12 @@ const I18N = {
     'settings.maskNote': "I campi mostrano un'anteprima mascherata del valore attuale. Lascia vuoto un campo per non modificarlo.",
     'settings.save': 'Salva',
     'settings.savedLive': 'Salvato e applicato subito.',
-    'settings.savedRestart': 'Salvato. Esegui docker compose restart worker per applicare.',
+    'settings.savedRestart': 'Salvato. Esegui docker compose up -d --force-recreate web worker per ricaricare ambiente e sorgenti.',
     'settings.noChange': 'Niente da salvare.',
     'settings.info': "Cos'è?",
 
     'section.llm': 'Modello linguistico',
-    'section.llm.intro': 'Va bene qualsiasi endpoint compatibile OpenAI, anche locale: Ollama (http://host.docker.internal:11434/v1) o LM Studio. Gli embedding girano sempre in locale e non richiedono mai una chiave.',
+    'section.llm.intro': 'Usa un endpoint chat compatibile OpenAI, anche un server locale (rete Docker: vedi README). Gli embedding sono locali di default; openai richiede una chiave API.',
     'section.discord': 'Discord',
     'section.discord.intro': 'Un solo bot serve tutti i server in cui lo inviti. Le impostazioni per server stanno nella sezione Workspace qui sotto.',
     'section.telegram': 'Telegram',
@@ -300,7 +302,7 @@ const I18N = {
     'section.workspaces.intro': "Un workspace raggruppa le sorgenti, così puoi interrogare un server senza mescolarci gli altri. Ognuno ha i suoi ruoli autorizzati e la sua destinazione per il digest.",
 
     'setup.chat': 'Provider chat',
-    'setup.chat.hint': 'Una chiave compatibile OpenAI. Gratis su OpenRouter (modelli con suffisso :free), Groq o NVIDIA NIM. Gli embedding restano locali e non costano nulla.',
+    'setup.chat.hint': 'API compatibile OpenAI o un server di modelli locale. Quote, prezzi e modelli dei provider cambiano. Un abbonamento coding agent non è credito API.',
     'setup.discord': 'Discord',
     'setup.discord.hint': "Developer Portal, crea un'applicazione con bot: abilita l'intent Message Content e invitalo con gli scope bot e applications.commands.",
     'setup.telegram': 'Telegram',
@@ -403,7 +405,7 @@ const I18N = {
 
     'sources.enable': 'Abilita',
     'sources.disable': 'Disabilita',
-    'sources.saved': 'Sorgente salvata.',
+    'sources.saved': 'Sorgente salvata. Riavvia il worker per ricaricare la allowlist dei canali.',
     'sources.noTopics': 'nessun argomento — non passerà nulla dal filtro',
     'sources.pickFound': '{n} canali trovati.',
     'sources.redditManual': 'Scrivi il nome del subreddit senza r/.',

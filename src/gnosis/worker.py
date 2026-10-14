@@ -72,10 +72,9 @@ async def run_worker() -> None:
         while True:
             try:
                 start, end = previous_week(datetime.now(UTC), settings.zoneinfo)
-                # Un digest per workspace, piu' uno globale se esistono sorgenti non
-                # assegnate: senza questo, due server finirebbero nello stesso riassunto.
+                # Con workspace configurati, nessun digest misto viene pubblicato.
                 workspaces = db.list_workspaces()
-                targets: list[dict[str, Any] | None] = [*workspaces, None]
+                targets: list[dict[str, Any] | None] = workspaces or [None]
                 for workspace in targets:
                     workspace_id = workspace["id"] if workspace else None
                     if db.digest_exists(start, end, workspace_id=workspace_id):

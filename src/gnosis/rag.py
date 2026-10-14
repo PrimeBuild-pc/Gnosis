@@ -23,12 +23,24 @@ class RAG:
         self.db = db
         self.llm = llm
 
-    async def ask(self, question: str, workspace_id: int | None = None) -> dict[str, Any]:
+    async def ask(
+        self,
+        question: str,
+        workspace_id: int | None = None,
+        *,
+        discord_guild_id: str | None = None,
+        source_external_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
         question = question.strip()
         if not question:
             raise ValueError("Domanda vuota")
+        scope: dict[str, Any] = {"workspace_id": workspace_id}
+        if discord_guild_id is not None:
+            if workspace_id is None or source_external_ids is None:
+                raise ValueError("Contesto Discord incompleto")
+            scope.update(discord_guild_id=discord_guild_id, source_external_ids=source_external_ids)
         embedding = await self.llm.embed_query(question)
-        rows = self.db.search(question, embedding, workspace_id=workspace_id)
+        rows = self.db.search(question, embedding, **scope)
         if not rows:
             return {
                 "answer": "Non trovo informazioni sufficienti nelle fonti raccolte.",

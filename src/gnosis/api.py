@@ -6,14 +6,15 @@ import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from psycopg.errors import UniqueViolation
+from pydantic import BaseModel, Field, field_validator
 
 from . import envfile
 from .config import Settings, SourceConfig, load_sources, save_sources
@@ -117,11 +118,36 @@ def _is_secret(key: str) -> bool:
 
 class Query(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
-    workspace_id: int | None = None
+    workspace_id: int | None = Field(default=None, gt=0)
+
+    @field_validator("question")
+    @classmethod
+    def nonblank_question(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Domanda vuota")
+        return value.strip()
 
 
 class ConfigUpdate(BaseModel):
     values: dict[str, str]
+
+    @field_validator("values")
+    @classmethod
+    def validate_settings(cls, values: dict[str, str]) -> dict[str, str]:
+        if values.get("GNOSIS_EMBEDDING_PROVIDER", "local") not in {"local", "openai"}:
+            raise ValueError("Provider embedding non valido")
+        for key in ("TELEGRAM_API_ID", "GNOSIS_TELEGRAM_ALLOWED_USERS"):
+            raw = values.get(key, "")
+            if raw and any(
+                not value.strip().isascii()
+                or not value.strip().isdigit()
+                or int(value.strip()) <= 0
+                for value in raw.split(",")
+            ):
+                raise ValueError(f"{key}: ID numerici positivi richiesti")
+            if key == "TELEGRAM_API_ID" and "," in raw:
+                raise ValueError("TELEGRAM_API_ID: un solo ID richiesto")
+        return values
 
 
 class SourceInput(BaseModel):
@@ -135,11 +161,34 @@ class SourceInput(BaseModel):
 
 class WorkspaceInput(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    platform: str | None = None
+    platform: Literal["discord", "telegram", "reddit"] | None = None
     external_id: str | None = None
     allowed_role_ids: list[str] | None = None
     digest_webhook: str | None = None
     digest_telegram_chat_id: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def workspace_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Nome workspace vuoto")
+        return value.strip()
+
+    @field_validator("external_id")
+    @classmethod
+    def numeric_server_id(cls, value: str | None) -> str | None:
+        if value is not None and (not value.isascii() or not value.isdigit() or int(value) <= 0):
+            raise ValueError("ID server non valido")
+        return value
+
+    @field_validator("allowed_role_ids")
+    @classmethod
+    def numeric_roles(cls, values: list[str] | None) -> list[str] | None:
+        if values is not None and any(
+            not value.isascii() or not value.isdigit() or int(value) <= 0 for value in values
+        ):
+            raise ValueError("ID ruolo non valido")
+        return values
 
 
 class RetentionUpdate(BaseModel):
@@ -157,8 +206,8 @@ class IgnoreAuthorInput(BaseModel):
 
 def create_app() -> FastAPI:
     settings = Settings.from_env()
-    if not settings.username or not settings.password:
-        raise RuntimeError("GNOSIS_USERNAME e GNOSIS_PASSWORD sono obbligatori")
+    if not settings.username or not settings.password or settings.password == "change-me":
+        raise RuntimeError("Imposta GNOSIS_USERNAME e una GNOSIS_PASSWORD personale")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -195,6 +244,48 @@ def create_app() -> FastAPI:
                 headers={"WWW-Authenticate": "Basic"},
             )
         return credentials.username
+
+    @app.middleware("http")
+    async def private_app(request: Request, call_next):
+        if request.url.path != "/health":
+            try:
+                authenticate(await security(request))
+            except HTTPException as error:
+                return JSONResponse(
+                    status_code=error.status_code,
+                    content={"detail": error.detail},
+                    headers=error.headers,
+                )
+            if request.method not in {"GET", "HEAD", "OPTIONS"}:
+                origin = request.headers.get("origin")
+                expected = f"{request.url.scheme}://{request.url.netloc}"
+                if (origin and origin != expected) or request.headers.get("sec-fetch-site") in {
+                    "cross-site",
+                    "same-site",
+                }:
+                    return JSONResponse(status_code=403, content={"detail": "Origine non valida"})
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
+    @app.exception_handler(UniqueViolation)
+    async def duplicate_workspace(request: Request, error: UniqueViolation) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": "ID server gia' assegnato"})
+
+    def public_workspaces(db):
+        return [
+            {**row, "digest_webhook": envfile.mask(row.get("digest_webhook", ""))}
+            for row in db.list_workspaces()
+        ]
+
+    def require_workspace(db, workspace_id):
+        if workspace_id is not None and not any(
+            row["id"] == workspace_id for row in db.list_workspaces()
+        ):
+            raise HTTPException(status_code=404, detail="Workspace non trovato")
 
     static_dir = Path(__file__).with_name("static")
 
@@ -239,7 +330,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/workspaces", dependencies=[Depends(authenticate)])
     def workspaces(request: Request):
-        return request.app.state.db.list_workspaces()
+        return public_workspaces(request.app.state.db)
 
     @app.post("/api/workspaces", dependencies=[Depends(authenticate)])
     def upsert_workspace(payload: WorkspaceInput, request: Request):
@@ -251,12 +342,12 @@ def create_app() -> FastAPI:
             digest_webhook=payload.digest_webhook,
             digest_telegram_chat_id=payload.digest_telegram_chat_id,
         )
-        return {"workspaces": request.app.state.db.list_workspaces()}
+        return {"workspaces": public_workspaces(request.app.state.db)}
 
     @app.delete("/api/workspaces/{workspace_id}", dependencies=[Depends(authenticate)])
     def delete_workspace(workspace_id: int, request: Request):
         request.app.state.db.delete_workspace(workspace_id)
-        return {"workspaces": request.app.state.db.list_workspaces()}
+        return {"workspaces": public_workspaces(request.app.state.db)}
 
     @app.get("/api/available-sources", dependencies=[Depends(authenticate)])
     def available_sources(request: Request, platform: str = ""):
@@ -270,10 +361,12 @@ def create_app() -> FastAPI:
 
     @app.post("/api/chat", dependencies=[Depends(authenticate)])
     async def chat(query: Query, request: Request):
+        require_workspace(request.app.state.db, query.workspace_id)
         return await request.app.state.rag.ask(query.question, workspace_id=query.workspace_id)
 
     @app.post("/api/search", dependencies=[Depends(authenticate)])
     async def search(query: Query, request: Request):
+        require_workspace(request.app.state.db, query.workspace_id)
         vector = await request.app.state.rag.llm.embed_query(query.question)
         rows = request.app.state.db.search(query.question, vector, workspace_id=query.workspace_id)
         return [
@@ -296,9 +389,10 @@ def create_app() -> FastAPI:
     @app.post("/api/digests/run", dependencies=[Depends(authenticate)])
     async def run_digest(request: Request, workspace_id: int | None = None):
         db = request.app.state.db
+        require_workspace(db, workspace_id)
         start, end = previous_week(datetime.now(UTC), settings.zoneinfo)
         digest_id = await request.app.state.digest.generate(start, end, workspace_id=workspace_id)
-        if digest_id:
+        if digest_id and (workspace_id is not None or not db.list_workspaces()):
             markdown = db.list_digests(limit=1, workspace_id=workspace_id)[0]["markdown"]
             workspace = next((w for w in db.list_workspaces() if w["id"] == workspace_id), None)
             await push_digest(
@@ -371,7 +465,10 @@ def create_app() -> FastAPI:
             raise HTTPException(
                 status_code=400, detail=f"Chiavi non consentite: {', '.join(sorted(unknown))}"
             )
-        envfile.write_env(_ENV_PATH, update.values)
+        try:
+            envfile.write_env(_ENV_PATH, update.values)
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
         os.environ.update(update.values)
         settings = Settings.from_env()
         request.app.state.llm.configure_chat(settings)

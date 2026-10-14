@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <a class="skip-link" href="#main" data-i18n="a11y.skip"></a>
   <!-- Guscio applicativo: barra dei bot e delle sezioni a sinistra, contesto (server) in
        alto, e un solo contenitore in cui il modulo attivo si disegna. Nessun contenuto
        specifico di Gnosis vive qui dentro: lo iniettano i moduli. -->
@@ -18,7 +19,7 @@
 
     <div class="topbar">
       <div class="server-picker">
-        <span data-i18n="workspace.label"></span>
+        <label for="workspace-select" data-i18n="workspace.label"></label>
         <select id="workspace-select"></select>
       </div>
       <span class="topbar-spacer"></span>
@@ -27,7 +28,7 @@
 
     <nav class="rail" id="rail"></nav>
 
-    <main class="main">
+    <main class="main" id="main" tabindex="-1">
       <div class="module" id="module"></div>
     </main>
   </div>

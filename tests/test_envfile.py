@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from gnosis.envfile import mask, read_env, write_env
 
 
@@ -14,7 +16,7 @@ def test_write_env_updates_existing_key_preserving_rest(tmp_path: Path):
     path.write_text("# header\nFOO=old\nBAZ=qux\n", encoding="utf-8")
     write_env(path, {"FOO": "new"})
     lines = path.read_text(encoding="utf-8").splitlines()
-    assert lines == ["# header", "FOO=new", "BAZ=qux"]
+    assert lines == ["# header", 'FOO="new"', "BAZ=qux"]
 
 
 def test_write_env_appends_new_key(tmp_path: Path):
@@ -25,12 +27,30 @@ def test_write_env_appends_new_key(tmp_path: Path):
 
 
 def test_mask_short_value_fully_masked():
-    assert mask("abc") == "***"
+    assert mask("abc") == "********"
 
 
-def test_mask_long_value_keeps_last_four():
-    assert mask("sk-or-v1-abcdef") == "***********cdef"
+def test_mask_hides_length_and_suffix():
+    assert mask("sk-or-v1-abcdef") == "********"
 
 
 def test_mask_empty_value():
     assert mask("") == ""
+
+
+@pytest.mark.parametrize("value", ["x\nGNOSIS_PASSWORD=bad", "x\rBAD=1", "x\0"])
+def test_env_injection_is_rejected_without_writing(tmp_path, value):
+    path = tmp_path / ".env"
+    path.write_text("FOO=old\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        write_env(path, {"FOO": value})
+    assert path.read_text(encoding="utf-8") == "FOO=old\n"
+
+
+def test_duplicate_keys_and_raw_special_characters(tmp_path):
+    path = tmp_path / ".env"
+    path.write_text("FOO=old\nFOO=duplicate\n", encoding="utf-8")
+    value = r"key$#'\"\\value"
+    write_env(path, {"FOO": value})
+    assert path.read_text(encoding="utf-8").count("FOO=") == 1
+    assert read_env(path)["FOO"] == value

@@ -56,11 +56,10 @@ def test_load_sources(tmp_path: Path):
     assert sources[0].name == "python"
 
 
-def test_empty_allowlist_is_rejected(tmp_path: Path):
+def test_empty_allowlist_collects_nothing_and_allows_setup(tmp_path: Path):
     path = tmp_path / "sources.toml"
     path.write_text("", encoding="utf-8")
-    with pytest.raises(ValueError):
-        load_sources(path)
+    assert load_sources(path) == []
 
 
 def test_save_sources_round_trips_through_load_sources(tmp_path: Path):
@@ -69,7 +68,7 @@ def test_save_sources_round_trips_through_load_sources(tmp_path: Path):
         SourceConfig(
             platform="telegram",
             external_id="-100123",
-            name='AI "Community"',
+            name='AI "Community"\nnext\tline',
             enabled=True,
             topics=("AI", "security"),
         ),

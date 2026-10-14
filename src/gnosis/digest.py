@@ -58,4 +58,5 @@ class DigestService:
             markdown,
             len({row["source_name"] for row in messages}),
             workspace_id=workspace_id,
+            message_ids=[row["id"] for row in messages],
         )

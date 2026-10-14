@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tomllib
 from collections.abc import Iterable
@@ -147,14 +148,11 @@ def load_sources(path: Path) -> list[SourceConfig]:
                     workspace=str(item.get("workspace", "")).strip(),
                 )
             )
-    if not sources:
-        raise ValueError("La allowlist delle sorgenti è vuota")
     return sources
 
 
 def _toml_string(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+    return json.dumps(value, ensure_ascii=False)
 
 
 def save_sources(path: Path, sources: Iterable[SourceConfig]) -> None:
