@@ -85,7 +85,7 @@ const railItem = ({icon, label, active, current, onClick, dot, locked, badge}) =
   const item = el('button', {className: 'rail-item', type: 'button'});
   // "active" e' il modulo aperto, "current" il bot su cui siamo: due cose diverse, due
   // stili diversi, altrimenti due righe risultano evidenziate insieme.
-  if (active) item.classList.add('active');
+  if (active) { item.classList.add('active'); item.setAttribute('aria-current', 'page'); }
   if (current) item.classList.add('current');
   if (locked) item.classList.add('locked');
   item.append(el('span', {className: 'rail-icon', text: icon}));
@@ -192,8 +192,10 @@ const renderInstall = (container, botId) => {
 // ---------------------------------------------------------------- modulo attivo
 
 const renderModule = async () => {
-  const container = document.getElementById('module');
-  container.replaceChildren();
+  if (location.hash === '#main') return;
+  const host = document.getElementById('module');
+  const container = el('div');
+  host.replaceChildren(container); // Late responses from the previous context stay detached.
 
   const hash = location.hash.replace(/^#\/?/, '');
   if (hash.startsWith('install-')) {
@@ -210,6 +212,11 @@ const renderModule = async () => {
     showError(container, error);
   }
 };
+
+document.querySelector('.skip-link').addEventListener('click', event => {
+  event.preventDefault();
+  document.getElementById('main').focus();
+});
 
 window.addEventListener('hashchange', () => { renderRail(); renderModule(); });
 

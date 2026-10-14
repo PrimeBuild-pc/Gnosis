@@ -16,6 +16,9 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest
+      - run: node tests/frontend.cjs
+      - run: bash tests/install-selfcheck.sh
+      - run: bash -n install.sh
       - run: docker build .
 
   publish:

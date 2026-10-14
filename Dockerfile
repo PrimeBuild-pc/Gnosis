@@ -11,7 +11,8 @@ RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-tran
 COPY migrations ./migrations
 COPY config ./config
 
-RUN useradd --create-home --uid 10001 gnosis && mkdir -p /data/telegram && \
+RUN groupadd --gid 10001 gnosis && \
+    useradd --create-home --uid 10001 --gid 10001 gnosis && mkdir -p /data/telegram && \
     chown -R gnosis:gnosis /app /data /tmp/fastembed_cache
 USER gnosis
 

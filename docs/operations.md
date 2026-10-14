@@ -1,64 +1,111 @@
 # Operazioni
 
-## Stato
+Prerequisiti e permessi: [README](../README.md). Tutti i comandi vanno eseguiti nella directory
+Gnosis. API e CLI sono strumenti dell'operatore globale, non di tenant isolati.
+
+## Stato e reload
 
 ```bash
 docker compose ps
-docker compose logs -f worker
-docker compose logs -f web
-curl http://127.0.0.1:8080/health
+curl --fail http://127.0.0.1:8080/health
+docker compose logs --tail=100 worker web
 ```
 
-## Controllo di salute
+`/health` conferma solo che il web risponde. Controlla la pagina Stato per i connettori.
+I log possono contenere dettagli privati/errori dei provider: sanitizzali prima di condividerli.
+
+- Credenziali/endpoint/modello cambiati: `docker compose up -d --force-recreate web worker`.
+  `restart` non ricarica l'env_file Docker. Le chiavi chat salvate dalla dashboard si applicano
+  subito al solo processo web; il worker va comunque ricreato.
+- Allowlist sorgenti cambiata: `docker compose restart worker`. La ricerca esclude subito una
+  sorgente disabilitata, ma il collector mantiene la configurazione fino al restart.
+- Ruoli e mapping workspace: applicati dal DB al comando successivo, senza restart.
+
+## Selfcheck (scrive fixture temporanee)
 
 ```bash
 docker compose run --rm web gnosis selfcheck
 ```
 
-Esegue le query vere contro il database configurato — workspace, sorgenti, ricerca con e
-senza contesto, digest, statistiche — creando dati temporanei con prefisso `__selfcheck__`
-e rimuovendoli alla fine. Esce con codice diverso da zero se qualcosa fallisce.
-
-Serve perche' i test dell'API usano un database finto: sono veloci ma non si accorgono se
-una query non e' valida per Postgres. Un bug di questo tipo e' gia' arrivato in produzione
-(un `coalesce` senza cast su una colonna `text[]`), e questo controllo lo intercetta.
+Solo su un database autorizzato: applica migration e crea fixture univoche, verifica query e
+isolamento Discord, poi rimuove le proprie fixture. Non disabilita le sorgenti esistenti.
+Non è un check read-only; un kill improvviso può lasciare fixture `__selfcheck__` da rimuovere
+manualmente dopo verifica. Non utilizzare per autorizzare automaticamente un deploy.
 
 ## Backup
 
-```bash
-docker compose exec -T db pg_dump -U gnosis -Fc gnosis > gnosis.dump
-```
-
-Ripristino su database vuoto:
+Conserva database, `.env`, configurazione e sessioni Telegram insieme. Le sessioni equivalgono
+a credenziali e il dump include messaggi, ruoli e webhook. Usa cifratura e una copia fuori host.
+Su Linux:
 
 ```bash
-docker compose exec -T db pg_restore -U gnosis -d gnosis --clean --if-exists < gnosis.dump
+umask 077
+mkdir -p backups
+chmod 700 backups
+docker compose stop worker web
+docker compose exec -T db pg_dump -U gnosis -Fc gnosis > backups/gnosis.dump
+cp .env backups/env.backup
+cp config/sources.toml backups/sources.toml
+docker compose run --rm --no-deps --entrypoint tar worker -C /data -cf - telegram > backups/telegram.tar
+docker compose up -d
 ```
 
-I backup contengono messaggi personali: cifrarli e limitarne l'accesso.
+Se un comando fallisce, verifica il backup prima di considerarlo valido; riavvia i servizi
+quando sicuro. Il DB continua a funzionare, ma non ci sono writer applicativi durante la copia.
+Cifra il backup con il tuo strumento abituale; non versionare `backups/` né caricarlo su issue.
 
-## Retention
+### Restore (distruttivo: autorizzazione e backup obbligatori)
 
-Due modi equivalenti:
+Ripristina solo backup fidati, compatibili con la versione del codice. Avvia solo `db`, mantieni
+web/worker fermi. Su una nuova installazione prepara prima `.env`, config e permessi secondo README.
 
-- **Dashboard** (tab Impostazioni → Conservazione dati): imposta un numero di giorni oltre il quale i messaggi vengono eliminati automaticamente ogni ora dal worker (di default è vuoto, cioè per sempre). Lo stesso pannello ha un tasto per cancellare subito tutta la memoria raccolta (messaggi, chunk, digest), con conferma esplicita.
-- **CLI**, per un'eliminazione una tantum:
+```bash
+docker compose stop worker web
+docker compose up -d db
+docker compose exec -T db pg_restore -U gnosis -d gnosis --clean --if-exists --exit-on-error < backups/gnosis.dump
+cp backups/env.backup .env
+cp backups/sources.toml config/sources.toml
+docker compose run --rm --no-deps --entrypoint tar worker -C /data -xf - < backups/telegram.tar
+sudo chgrp 10001 .env config config/sources.toml
+chmod 660 .env config/sources.toml
+chmod 2770 config
+docker compose up -d --force-recreate
+```
+
+La password PostgreSQL nel volume di destinazione deve corrispondere a quella ripristinata
+in `.env`; ripristinare il file non cambia l'utente PostgreSQL. Non proseguire se il restore
+fallisce. Verifica accesso, Stato e un campione di fonti prima di riattivare i webhook.
+
+## Retention e cancellazione
+
+Impostazioni → Conservazione dati: giorni massimi dei messaggi (default: nessuna scadenza).
+Il worker elimina messaggi e chunk ogni ora. CLI una tantum:
 
 ```bash
 docker compose run --rm worker gnosis prune --before 2025-01-01
 ```
 
-Le cancellazioni ricevute in tempo reale da Telegram e Discord rimuovono messaggi e chunk associati. Reddit non garantisce notifiche di cancellazione retroattive: applicare una retention breve e gestire tempestivamente eventuali richieste di rimozione.
+`prune`/retention non eliminano i digest già salvati. Anche una cancellazione ricevuta dalla
+piattaforma non riscrive i digest storici: possono conservare informazioni derivate. `/digest`
+Discord verifica ancora le citazioni; l'admin resta autorizzato all'archivio globale.
+La funzione **wipe** cancella tutta la memoria raccolta, non è limitata al workspace selezionato.
+Il worker può raccogliere nuovamente messaggi al prossimo backfill: per un'erasure duratura,
+ferma/disabilita le sorgenti e gestisci anche backup/digest. Reddit non garantisce eventi di
+cancellazione retroattiva; applica i termini correnti e gestisci richieste di rimozione.
 
-## Aggiornamento
+## Aggiornamento / rollback
+
+Dopo backup e verifica che il checkout non contenga modifiche locali da preservare:
 
 ```bash
+docker compose stop worker web
 git pull --ff-only
 docker compose build
 docker compose run --rm web gnosis db-init
-docker compose up -d
+docker compose up -d --force-recreate
 ```
 
-## Accesso remoto
-
-Il servizio è deliberatamente esposto solo su `127.0.0.1`. Per accesso remoto usare una rete privata o un reverse proxy HTTPS. Non esporre direttamente la porta 8080 su Internet.
+Verifica `/health`, Stato e configurazione workspace. I volumi restano: **mai `down -v`** per
+aggiornare. Il rollback di codice può richiedere anche un restore del DB compatibile: le
+migration non hanno downgrade automatico. Non ruotare solo POSTGRES_PASSWORD su un volume
+esistente; vedi README per la procedura PostgreSQL.

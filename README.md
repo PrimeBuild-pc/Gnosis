@@ -1,317 +1,331 @@
-<p align="center">
-  <img src="docs/assets/in-development.svg" alt="in development..." width="420">
-</p>
+# Gnosis
 
-<p align="center">
-  <img src="docs/assets/banner.svg" alt="Gnosis" width="100%">
-</p>
+Knowledge base privata per contenuti autorizzati di Discord, Telegram e Reddit: raccolta,
+ricerca ibrida PostgreSQL/pgvector, risposte con citazioni, digest e dashboard IT/EN.
+Python 3.11+, FastAPI, vanilla JavaScript, Docker Compose. Progetto in sviluppo, licenza MIT.
 
-<p align="center">
-  <a href="https://github.com/PrimeBuild-pc/Gnosis/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=git&amp;logoColor=white"></a>
-  <a href="https://github.com/PrimeBuild-pc/Gnosis/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
-  <a href="https://github.com/PrimeBuild-pc/Gnosis/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
-</p>
+## Prima di iniziare: limiti e costi
 
-<p align="center">
-  <a href="https://github.com/PrimeBuild-pc/Gnosis/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/PrimeBuild-pc/Gnosis/ci.yml?branch=main&amp;style=plastic&amp;logo=githubactions&amp;label=CI"></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2ea44f?style=plastic"></a>
-  <img src="https://img.shields.io/badge/self--hosted-no%20cloud%2C%20no%20tracking-2dd4a7?style=plastic" alt="Self-hosted">
-  <img src="https://img.shields.io/badge/privacy-first-2dd4a7?style=plastic" alt="Privacy-first">
-  <img src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=plastic&amp;logo=python&amp;logoColor=white" alt="Python 3.11 or newer">
-  <img src="https://img.shields.io/badge/FastAPI-API-009688?style=plastic&amp;logo=fastapi&amp;logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=plastic&amp;logo=postgresql&amp;logoColor=white" alt="PostgreSQL">
-  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=plastic&amp;logo=docker&amp;logoColor=white" alt="Docker Compose">
-</p>
+- **Un solo operatore fidato**, con un account admin HTTP Basic. Dashboard e API amministrano
+  l'intera installazione: il selettore workspace è un filtro, **non** un confine di autorizzazione
+  tra utenti web. Non è un SaaS pubblico multi-tenant. Per amministratori che non devono vedere
+  i dati reciproci, usa installazioni, database, credenziali e volumi separati.
+- Lo stesso bot Discord può servire più server. I comandi richiedono un workspace associato
+  esplicitamente all'ID del server e ai suoi ruoli; senza mapping o con ruoli vuoti negano
+  l'accesso. `/ask` usa solo messaggi del server, workspace e canali che il membro può leggere.
+  Le risposte sono private (ephemeral), senza menzioni automatiche. `/digest` verifica tutti
+  i messaggi di input salvati contro i permessi attuali, non soltanto le citazioni; i digest
+  precedenti alla migration 006 non sono mostrati da Discord finché non vengono rigenerati.
+- La dashboard, il grafo e il bot Telegram autorizzato possono consultare **tutte** le fonti.
+  Telegram risponde solo in conversazioni private: autorizza soltanto operatori fidati.
+- Self-hosting non significa offline: Discord/Telegram/Reddit richiedono rete e API. Se usi
+  chat o embedding remoti, i contenuti elaborati vengono inviati al provider. Gli embedding
+  predefiniti sono locali; il build scarica il modello da terzi e richiede rete, spazio e RAM.
+- **ChatGPT/Codex/Claude/Pi e gli abbonamenti coding agent non sono credito OpenAI API.**
+  Per un provider remoto servono credenziali API e la relativa fatturazione. I free tier possono
+  cambiare, avere quote o non offrire il modello scelto. È possibile usare un modello chat
+  locale compatibile OpenAI già disponibile: non serve comprare una chiave OpenAI.
+- Citazioni valide non garantiscono che il modello abbia interpretato correttamente la fonte.
+  Controlla gli originali prima di prendere decisioni. Non raccogliere contenuti senza consenso.
 
-<p align="center"><i>A private, source-grounded knowledge base for Telegram, Discord, and Reddit. Collect authorized community content, filter noise, generate weekly digests, and ask questions with citations back to the original messages.</i></p>
+## Installazione homelab consigliata (Linux + Docker)
 
----
+### 1. Prepara la macchina
 
-## Overview
-
-Gnosis turns selected online communities into a searchable personal knowledge base. It collects content through official platform APIs, enriches and embeds useful messages, and stores everything in PostgreSQL with pgvector.
-
-Answers are generated only from retrieved content and include links to the original platform messages whenever available.
-
-### Key features
-
-- Official connectors for **Telegram**, **Discord**, and **Reddit**
-- Explicit source allowlist
-- Idempotent ingestion and message update handling
-- Relevance filtering, tagging, chunking, and embeddings
-- Hybrid PostgreSQL full-text and pgvector retrieval
-- Source-grounded RAG answers with validated citations
-- Weekly cited digests
-- Private web interface protected with HTTP Basic authentication
-- Reproducible deployment with Docker Compose
-
-## Architecture
-
-<div align="center">
-
-```text
-Telegram ─┐
-Discord  ─┼─> Async worker ─> Filter & embed ─> PostgreSQL + pgvector
-Reddit   ─┘                                      │
-                                                   ├─> Hybrid RAG search
-                                                   ├─> Weekly digest
-                                                   └─> FastAPI web interface
-```
-
-</div>
-
-| Component | Technology | Purpose |
-|---|---|---|
-| Collectors | Telethon, discord.py, asyncpraw | Authorized platform ingestion |
-| Processing | Python, OpenAI API | Filtering, classification, chunking, embeddings |
-| Storage | PostgreSQL 16, pgvector | Messages, metadata, full-text index, vectors |
-| Application | FastAPI, vanilla HTML/CSS/JS | Private chat, sources, and digest archive |
-| Operations | Docker Compose | Database, worker, and web services |
-
-## 🚀 Quick start
-
-Three commands on any Linux machine — a VPS, a cloud VM, a home server, or a laptop.
+Installa Git, [Docker Engine](https://docs.docker.com/engine/install/) e il plugin
+[Docker Compose](https://docs.docker.com/compose/install/) **>= 2.30** (versione moderna consigliata).
+Su Windows/macOS usa Docker Desktop e una shell Linux/WSL per i comandi qui sotto.
+Non è necessario un dominio né aprire porte sul router.
 
 ```bash
+docker version
+docker compose version
 git clone https://github.com/PrimeBuild-pc/Gnosis.git
 cd Gnosis
+```
+
+Prevedi alcuni GB liberi e RAM per PostgreSQL e il modello embedding; i requisiti del modello
+chat locale sono separati. Non viene garantito che un determinato tier cloud sia gratuito o
+sufficiente. L'app usa CPU per gli embedding e non richiede una GPU per il modello predefinito.
+
+Il gruppo Docker equivale praticamente a root: aggiungici soltanto utenti fidati. L'installer
+non installa Docker, non cambia gruppi host e non esegue script scaricati dalla rete.
+
+### 2. Scegli installazione guidata o manuale
+
+**Guidata**, dopo aver letto `install.sh`:
+
+```bash
 ./install.sh
 ```
 
-That is the whole install. `install.sh` installs Docker and the Compose plugin if they are missing (Debian/Ubuntu), asks for an admin password and a free chat provider, pulls the prebuilt image (amd64 and arm64), initialises the database, and starts the stack. Re-run it any time to reconfigure — it never overwrites values you do not touch.
+Chiede credenziali admin e configurazione chat, genera una password database per installazioni
+nuove, crea un'allowlist vuota e compila il checkout locale. Può chiedere `sudo` esclusivamente
+per assegnare il gruppo dei file al container. Non attiva piattaforme né scarica modelli chat.
+Il build scarica dipendenze e il modello embedding. Conserva le credenziali non modificate;
+non usarlo per ruotare automaticamente la password di un database già esistente.
 
-### Requirements
-
-- A Linux machine with `git`. Everything else the installer handles.
-- One free chat API key — OpenRouter, Groq, or NVIDIA NIM all have a free tier. Embeddings run locally, so they need no key and cost nothing.
-- Platform credentials only for the platforms you actually want. None are required to start.
-
-### Then configure it from the dashboard
-
-Open <http://127.0.0.1:8080> and sign in with the admin user you just chose.
-
-- **Settings** opens on a configuration checklist: what is ready, what is still missing, which field to fill, and a link straight to the page that issues each credential. Chat keys apply immediately, with no restart.
-- **Sources** is where you add the channels, chats, and subreddits to follow. Nothing is collected until you list it there.
-
-The service binds to `127.0.0.1` and never opens a port to the internet. On a remote server, reach the dashboard through an SSH tunnel from your own computer:
+**Manuale**, passi equivalenti:
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 user@your-server
-```
-
-Then open <http://127.0.0.1:8080> locally. No firewall rule, no domain, no certificate.
-
-If you enable Telegram, one interactive login is needed after the install to create the session:
-
-```bash
-docker compose run --rm worker gnosis telegram-login
-```
-
-<details>
-<summary>Manual install, step by step</summary>
-
-```bash
-git clone https://github.com/PrimeBuild-pc/Gnosis.git
-cd Gnosis
+umask 077
 cp .env.example .env
-cp config/sources.example.toml config/sources.toml
-docker compose pull   # or: docker compose build
+printf '# Add only authorized sources.\n' > config/sources.toml
+```
+
+Apri `.env` con un editor locale. Imposta:
+
+```dotenv
+POSTGRES_PASSWORD=YOUR_RANDOM_ALPHANUMERIC_DATABASE_PASSWORD
+DATABASE_URL=postgresql://gnosis:YOUR_RANDOM_ALPHANUMERIC_DATABASE_PASSWORD@db:5432/gnosis
+GNOSIS_USERNAME=admin
+GNOSIS_PASSWORD=YOUR_UNIQUE_LONG_ADMIN_PASSWORD
+```
+
+Genera le password nel tuo password manager. Ripeti la stessa password database nei due
+campi; usa caratteri alfanumerici per evitare l'URL encoding. **Non condividere né incollare
+il file in una chat con un agente.** `.env` è escluso da Git e usa la sintassi dotenv di
+Compose. Per l'editing manuale preferisci credenziali alfanumeriche; i caratteri speciali
+richiedono quoting ed escaping corretti (`$` letterale diventa `$$` dentro doppi apici).
+Installer e dashboard serializzano automaticamente anche virgolette e backslash.
+Valori multilinea non sono supportati. `change-me` o una password admin vuota impediscono l'avvio.
+
+Configura chat in uno dei due modi:
+
+```dotenv
+# API OpenAI (fatturazione separata)
+OPENAI_API_KEY=YOUR_API_KEY
+OPENAI_CHAT_MODEL=gpt-4o-mini
+```
+
+oppure:
+
+```dotenv
+# Endpoint OpenAI-compatible remoto o un tuo server locale già pronto
+GNOSIS_CHAT_API_KEY=local
+GNOSIS_CHAT_BASE_URL=http://YOUR_MODEL_SERVICE:11434/v1
+OPENAI_CHAT_MODEL=YOUR_INSTALLED_MODEL_NAME
+```
+
+`local` è solo un valore non vuoto per server che non richiedono una chiave: non bypassa
+l'autenticazione di un provider remoto. Dal container, `127.0.0.1` è il container stesso:
+usa il nome di un servizio sulla medesima rete Docker privata. Docker Desktop supporta
+`host.docker.internal`; su Linux il mapping `host-gateway` e la raggiungibilità del server
+modelli vanno configurati esplicitamente. Non esporre un server modelli senza autenticazione
+su Internet per risolvere questo problema. I modelli vanno installati dall'operatore, non
+scaricati automaticamente dall'agente.
+
+Puoi lasciare chat non configurata per aprire la dashboard; il worker attende una chiave non
+vuota e segnalerà errore finché manca. Lascia locali gli embedding (`local`, dimensioni `384`).
+Cambiare provider/modello/dimensioni su dati esistenti richiede una migration e re-indicizzazione:
+`db-init` non riapplica migration già eseguite.
+
+### 3. Proteggi i file e avvia
+
+Il container usa UID/GID **10001**, non root. Su un host Linux dedicato, verifica che il gruppo
+10001 non contenga altri utenti host; condividi la scrittura soltanto con questo gruppo:
+
+```bash
+sudo chgrp 10001 .env config config/sources.toml
+chmod 660 .env config/sources.toml
+chmod 2770 config
+docker compose config --quiet
+docker compose build
 docker compose run --rm web gnosis db-init
 docker compose up -d
 ```
 
-`.env` and `config/sources.toml` are both excluded from Git. Everything in them can also be set from the dashboard afterwards.
+Mantieni il proprietario host dei file: questi permessi consentono l'editor dell'operatore e
+la dashboard, senza `chmod 666`/`777`. Su Desktop i bind mount hanno semantiche diverse: verifica
+la scrittura da dashboard e non allargare i permessi a tutti come workaround.
 
-</details>
+Il build locale serve a eseguire le modifiche del checkout: `pull` del tag registry `latest`
+potrebbe scaricare una versione precedente. Il modello embedding viene incluso nell'immagine;
+non abbiamo eseguito download/deploy per verificare questa guida.
 
-## Configuration
-
-| Variable | Required | Description |
-|---|---:|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection URL |
-| `GNOSIS_EMBEDDING_PROVIDER` | No | `local` (default, free, runs in-container via fastembed) or `openai` |
-| `GNOSIS_EMBEDDING_MODEL` / `GNOSIS_EMBEDDING_DIMENSIONS` | No | Local embedding model and vector size (default: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384) |
-| `GNOSIS_CHAT_API_KEY` / `GNOSIS_CHAT_BASE_URL` | Yes | OpenAI-compatible chat provider (classification, RAG, digest). Point it at a free tier — OpenRouter, NVIDIA NIM, Groq — or OpenAI. Falls back to `OPENAI_API_KEY`/`OPENAI_BASE_URL` if unset |
-| `OPENAI_CHAT_MODEL` | Yes | Chat model name (set it to match whichever provider is used for chat) |
-| `OPENAI_API_KEY` | Only if `GNOSIS_EMBEDDING_PROVIDER=openai` or as chat fallback | OpenAI key, needed only when opting into OpenAI for embeddings or chat |
-| `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` | No | Fallback role allowlist. Prefer per-workspace roles, set from the dashboard |
-| `GNOSIS_DIGEST_DISCORD_WEBHOOK` | No | Fallback digest webhook, a single URL. Prefer the per-workspace one |
-| `GNOSIS_BOTS` | No | Other Prime Build bots as `id=url`, comma separated, so the dashboard can link them |
-| `GNOSIS_USERNAME` | Yes | Private web interface username |
-| `GNOSIS_PASSWORD` | Yes | Private web interface password |
-| `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | If enabled | Telegram client credentials |
-| `TELEGRAM_BOT_TOKEN` | No | BotFather token for the interactive `/ask` and `/digest` Telegram bot |
-| `GNOSIS_TELEGRAM_ALLOWED_USERS` | If bot enabled | Comma-separated Telegram user IDs authorized to use the bot |
-| `GNOSIS_DIGEST_TELEGRAM_CHAT_ID` | No | Telegram chat to auto-publish the weekly digest to |
-| `DISCORD_BOT_TOKEN` | If enabled | Official Discord bot token (also powers the `/ask` and `/digest` slash commands) |
-| `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` | No | Comma-separated Discord role IDs authorized to use the bot's slash commands |
-| `GNOSIS_DIGEST_DISCORD_WEBHOOK` | No | Discord channel webhook URL to auto-publish the weekly digest to |
-| `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | If enabled | Reddit OAuth credentials |
-
-See [`.env.example`](.env.example) for every available setting and [`config/sources.example.toml`](config/sources.example.toml) for the source allowlist format.
-
-Embeddings default to a local multilingual model (`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions, via [fastembed](https://github.com/qdrant/fastembed)) — no API key, no cost, and it runs fine on a small ARM instance. Switching to OpenAI embeddings requires matching `GNOSIS_EMBEDDING_DIMENSIONS` to the chosen model and re-applying `migrations/002_local_embeddings.sql` (or a custom one) for the new vector size.
-
-## Commands
+### 4. Apri e verifica
 
 ```bash
-gnosis db-init
-gnosis telegram-login
-gnosis worker
-gnosis web
-gnosis digest
-gnosis prune --before 2025-01-01
-gnosis selfcheck
+docker compose ps
+curl --fail http://127.0.0.1:8080/health
 ```
 
-`selfcheck` runs the real queries against the configured database — workspaces, sources, scoped and unscoped search, digests, stats — on temporary rows it cleans up afterwards, and exits non-zero if anything fails. The API tests use a fake database, so they cannot tell whether a query is actually valid for PostgreSQL; this closes that gap.
+Apri <http://127.0.0.1:8080>, accedi con le credenziali admin. `/health` è pubblico e indica
+solo che il web risponde, non che Discord/chat siano pronti. La pagina **Stato** mostra worker,
+pipeline e attività delle sorgenti. API, asset e documentazione `/docs` richiedono autenticazione.
 
-Connectors backfill the latest 200 accessible items, then continue through real-time events or polling. Repeated ingestion is safe and does not duplicate platform messages.
-
-## 💬 Telegram bot
-
-If `TELEGRAM_BOT_TOKEN` and `GNOSIS_TELEGRAM_ALLOWED_USERS` are set, the worker also runs a private Telegram bot (via BotFather) alongside the web UI:
-
-- `/ask <question>` — source-grounded answer with `[Mn]` citations and links, same engine as the web chat.
-- `/digest` — the latest saved weekly digest.
-
-Only the whitelisted Telegram user IDs can use it; see [platform setup](docs/setup-platforms.md#bot-interattivo-ask-digest).
-
-## 🎮 Discord bot
-
-Unlike Telegram, ingestion and commands share the same Discord bot — as soon as `DISCORD_BOT_TOKEN` is set, `/ask` and `/digest` slash commands are registered alongside the existing collector:
-
-- `/ask <domanda>` — same source-grounded answer engine as the web chat and the Telegram bot.
-- `/digest` — the latest saved weekly digest.
-
-Only members with a role listed in `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` can use them; without it the commands reply "not configured" but ingestion keeps working. The bot's invite URL needs the `applications.commands` OAuth scope, not just `bot`, or the slash commands won't appear — see [platform setup](docs/setup-platforms.md#bot-interattivo-ask-digest-1).
-
-The weekly digest can also be pushed automatically (instead of only on-demand) to a Telegram chat and/or a Discord channel webhook — see `GNOSIS_DIGEST_TELEGRAM_CHAT_ID` / `GNOSIS_DIGEST_DISCORD_WEBHOOK` above.
-
-## 🛠️ Admin dashboard
-
-The dashboard is an application shell, not a page of tabs: **platforms down the left rail, the server picker across the top**. Whatever you open, you are looking at it through the server selected up there.
-
-```
-┌──────────────┬──────────────────────────────────────┐
-│ 🧠 Gnosis    │  Context: [ Prime Build ▾ ]      🌐  │
-│ 🚪 Doorman   ├──────────────────────────────────────┤
-│ 🔐 D-View    │                                      │
-│ ──────────── │   Discord                            │
-│ ◎ Overview   │   ├ Credentials                      │
-│ 💬 Chat      │   ├ Server settings · Prime Build    │
-│ 📰 Digests   │   └ Channels read                    │
-│ 🕸 Graph     │                                      │
-│ ──────────── │                                      │
-│ 🎮 Discord ● │                                      │
-│ ✈ Telegram ○ │                                      │
-│ 👽 Reddit  ○ │                                      │
-└──────────────┴──────────────────────────────────────┘
-```
-
-- **Platforms** each get their own page: credentials, the settings that belong to the selected server (authorized roles, digest webhook), and the channels being read. The dot next to each one says whether it is configured and collecting.
-- **Sources** are picked from a dropdown of channels the bot can actually see; the worker publishes that list, so 19-digit IDs never have to be copied by hand. Each page states plainly that these are the channels Gnosis *reads*, while `/ask` works in any channel where the bot is present.
-- **Every field carries an `i` button** explaining what it does, where the value comes from, and what breaks without it.
-- **Overview** opens on a setup checklist plus what has been collected so far, counted for the selected server.
-- **Language**: English and Italian, guessed from the browser and switchable from the header. All strings live in `static/i18n.js`; the API returns data, never prose.
-- **Bots**: the other Prime Build bots appear in the rail, greyed out until reachable. Set `GNOSIS_BOTS=doorman=http://host:3000,dview=http://host:3001` and they turn into links. The dashboard shows the install command rather than running it — installing from a browser would mean handing the container the Docker socket, which is full control of the host.
-
-The frontend is dependency-free vanilla JS in four files: `i18n.js` (strings), `ui.js` (DOM helpers), `modules.js` (Gnosis pages), `shell.js` (rail, routing, server picker). Only `modules.js` knows anything about Gnosis, which is what makes the shell reusable.
-
-## 🗂️ Workspaces
-
-A workspace groups sources so a question can be answered from one server without dragging in the others. Without it, every answer and every digest mixes all configured sources together.
-
-- Pick the context from the selector in the header. Chat, digests, sources and stats all follow it; **All sources** stays available as an explicit choice.
-- Give a workspace the Discord server ID and `/ask` inside that server scopes itself automatically, using that workspace's authorized roles.
-- Each workspace has its own weekly digest and its own webhook, so two servers never share a destination.
-- In `config/sources.toml`, a source joins a workspace with `workspace = "Name"`. Sources without one stay reachable from the global context only.
-
-## 🕸️ Knowledge graph
-
-Every message that passes the relevance filter also goes through a lightweight entity/relationship extraction pass (one extra LLM call). Results land in three tables (`entities`, `entity_mentions`, `entity_relations`) queryable via `GET /api/entities` and `GET /api/entities/{id}`, and browsable from the dashboard's Grafo tab.
-
-Known limitations, by design for this iteration:
-- Entity deduplication matches on normalized name (`strip().casefold()`) + type — near-duplicates with different surface forms ("Claude" vs "Claude AI") stay separate nodes. An embedding-based resolution pass is the natural upgrade path if this becomes a problem in practice.
-- The graph doesn't feed into RAG answers yet — it's deliberately kept separate from `/ask` so it can't affect the citation-integrity guarantees already in place there.
-
-## 🔒 Platform access and privacy
-
-- **Discord:** only an official bot authorized by the server administrators is supported. User tokens and self-bots are explicitly unsupported.
-- **Telegram:** the client is limited to chats explicitly listed in `sources.toml` and accessible by the authenticated account.
-- **Reddit:** access uses official OAuth APIs and must follow current rate limits and developer terms.
-- **Web access:** the service binds to `127.0.0.1` by default. Use a private network or an HTTPS reverse proxy for remote access.
-- **Secrets:** never commit `.env`, `sources.toml`, Telegram session files, or database backups.
-
-Read the complete [platform setup guide](docs/setup-platforms.md) before enabling collectors.
-
-## 🖥️ Running on a server, VPS, or cloud VM
-
-The install is the same everywhere. What changes is only how you reach the dashboard and how you keep it running.
-
-### Sizing
-
-Gnosis runs on a small instance. It has been deployed and tested on an Oracle Cloud Always Free Ampere VM with **1 OCPU and 6 GB of RAM**, which is a quarter of what that free tier allows. Local embeddings are the heaviest part, and they fit comfortably.
-
-The published image is multi-arch, so `x86_64` and `arm64` (Ampere, Graviton, Raspberry Pi 5) all pull the same tag with no rebuild.
-
-### Reaching the dashboard
-
-Pick one. The first needs no configuration at all and is the recommended default.
-
-**SSH tunnel** — nothing is exposed, nothing to configure:
+Se la macchina è remota, dal tuo computer:
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 user@your-server
+ssh -N -L 8080:127.0.0.1:8080 USER@HOMELAB_HOST
 ```
 
-**Private network** — [Tailscale](https://tailscale.com) or WireGuard if you want it reachable from a phone without opening ports.
+Apri lo stesso URL locale. Compose pubblica solo loopback; PostgreSQL non pubblica porte host.
+HTTP Basic non cifra il traffico: per accesso fuori dal tunnel usa HTTPS con proxy e firewall.
+Non pubblicare direttamente 8080. Il proxy deve preservare Host e schema corretti per i
+controlli same-origin; limita gli header forwarded a proxy fidati. Non c'è protezione brute-force
+integrata: non trattare questa dashboard come un servizio pubblico.
 
-**Public domain with HTTPS** — only if you actually need it. Point a domain at the server, open 443, and put a TLS reverse proxy in front:
+## Discord: configurazione passo per passo, anche su più server
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name gnosis.your-domain.com;
-    location / { proxy_pass http://127.0.0.1:8080; }
-}
-```
+1. Ottieni il consenso degli amministratori dei server e dei titolari dei contenuti.
+2. Apri <https://discord.com/developers/applications>, **New Application**, poi **Bot**.
+   Copia/resetta il bot token e inseriscilo nel campo `DISCORD_BOT_TOKEN` della pagina Discord
+   della dashboard (o in `.env`). È una credenziale: nessun token utente/self-bot è supportato.
+3. In **Bot → Privileged Gateway Intents**, abilita **Message Content Intent**. Per questa
+   implementazione non sono richiesti Presence o Server Members Intent. Se Discord richiede
+   approvazione dell'intent per il tuo bot, completa quella procedura prima di avviarlo.
+4. In **OAuth2 → URL Generator**, seleziona `bot` e `applications.commands`. Permessi minimi
+   nei canali autorizzati: **View Channels**, **Read Message History**, **Send Messages**
+   per le risposte. Non concedere **Administrator**, gestione server/ruoli o espulsione utenti.
+   Apri il link, scegli il server e approva. Ripeti per ogni server autorizzato.
+5. Dopo aver salvato credenziali ricrea i processi (un semplice `restart` non rilegge `.env`):
 
-Never publish port 8080 directly: HTTP Basic authentication over plain HTTP sends the password in the clear.
+   ```bash
+   docker compose up -d --force-recreate web worker
+   ```
 
-### Surviving reboots
+6. Attiva Discord **Impostazioni utente → Avanzate → Modalità sviluppatore**. Copia l'ID del
+   **server** e gli ID dei **ruoli** autorizzati (non ID utente o nome ruolo).
+7. Nella dashboard **Impostazioni → Workspace**, crea un workspace dal nome univoco con ID
+   server. Selezionalo in alto; nella pagina **Discord** salva gli ID ruolo separati da virgola.
+   Un workspace senza ruoli nega tutti i comandi. La vecchia variabile globale
+   `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` è deprecata e non concede più accesso.
+8. Nella pagina **Discord → Sorgenti**, scegli soltanto i canali da leggere dalla tendina.
+   Usa esattamente il nome del workspace creato, anche se differisce dal nome del server
+   proposto dalla tendina. I canali scoperti non sono automaticamente autorizzati alla raccolta.
+   Indica argomenti concreti (ad esempio `Linux, backup, homelab`) per il filtro di rilevanza.
+9. Dopo modifiche all'allowlist:
 
-Every service declares `restart: unless-stopped`, so the stack comes back on its own. Make sure the Docker daemon itself starts at boot:
+   ```bash
+   docker compose restart worker
+   ```
+
+10. Prova `/ask` con un membro avente il ruolo, poi senza ruolo. Prova nel secondo server:
+    nessuna fonte del primo deve comparire. Un server non mappato nega accesso anche se il bot
+    è invitato. Nei DM Discord i comandi non accedono alla knowledge base.
+
+La sincronizzazione globale dei comandi può impiegare tempo. Il collector legge gli ultimi
+200 messaggi accessibili all'avvio, poi eventi live/modifiche/cancellazioni. Le sorgenti devono
+essere canali testuali: thread/forum non sono inclusi nel flusso di autorizzazione di `/ask`.
+I permessi vengono letti dalla cache Discord aggiornata dagli eventi, non da una richiesta REST
+per ogni comando. Messaggi storici senza `guild_id` verificabile sono esclusi dai comandi.
+
+### Digest e canali riservati
+
+Il digest automatico è **per workspace**, non per membro. Un webhook pubblica tutto il digest
+alla sua destinazione: i ruoli `/ask` non proteggono un webhook. Scegli un canale di destinazione
+con un pubblico autorizzato a **tutte** le sorgenti del workspace; altrimenti lascia il webhook
+vuoto. Non mischiare server nei workspace. L'admin può volontariamente configurare sorgenti
+cross-platform: ciò non attribuisce ai membri Discord il diritto di leggerle. I digest di
+workspace Discord includono soltanto messaggi con guild verificabile corrispondente al mapping.
+
+Il webhook si crea in **Impostazioni canale → Integrazioni → Webhook**, e si salva nel workspace.
+La dashboard mostra solo un indicatore mascherato; campo vuoto conserva il valore. Per revocarlo,
+il proprietario può inviare `digest_webhook: ""` all'API autenticata o revocarlo in Discord.
+I workspace senza destinazione non usano il webhook globale. Quando esistono workspace, il
+worker non crea né pubblica un digest globale; una generazione globale manuale resta in archivio
+senza push. Configurare una destinazione sbagliata resta una responsabilità dell'operatore.
+
+## Telegram e Reddit (facoltativi)
+
+Vedi [setup piattaforme](docs/setup-platforms.md). Telegram richiede `TELEGRAM_API_ID`,
+`TELEGRAM_API_HASH`, un login interattivo e la sessione nel volume `telegram-data`:
 
 ```bash
-sudo systemctl enable docker
+docker compose stop worker
+docker compose run --rm worker gnosis telegram-login
+docker compose up -d worker
 ```
 
-## Development
+Il bot Telegram è separato, richiede token BotFather e `GNOSIS_TELEGRAM_ALLOWED_USERS`;
+è solo per operatori autorizzati all'intera base dati e risponde solo in privato.
+Reddit richiede credenziali OAuth e rispetto dei termini/rate limit correnti. Nessuna piattaforma
+è necessaria per aprire la dashboard. `config/sources.example.toml` è solo documentazione:
+non copiarne sorgenti dimostrative in un'installazione reale senza autorizzazione.
+
+## Installazione e controllo con un agente AI
+
+Puoi chiedere al coding agent di leggere `AGENTS.md` e questa guida e preparare installazione,
+config non sensibile, verifiche o controllo successivo via **CLI esistente**, **API `/docs`**
+autenticata o browser. Non occorre un nuovo MCP, token universale o accesso al Docker socket
+dal container. Le autorizzazioni dell'agent harness/SSH/browser restano necessarie e separate
+sia da Discord sia dal pagamento del provider chat.
+
+Procedura consigliata:
+
+1. Definisci host, repository, workspace/server e azioni consentite. L'agente propone i comandi
+   con effetti, costi/download e rollback; ottiene il tuo consenso prima di eseguirli.
+2. Inserisci tu password, token, login/2FA e inviti Discord. Non far stampare `.env`, header
+   Authorization, webhook, sessioni o backup nei log/transcript. Usa una sessione browser già
+   autenticata o un canale credenziali approvato dal tuo harness, non credenziali nel prompt.
+3. Dopo il consenso l'agente può installare/ricreare solo lo stack concordato, controllare
+   `/health`, leggere Stato e provare sorgenti con dati sintetici. Può configurare workspace
+   e allowlist tramite le stesse API della dashboard.
+4. Per il controllo successivo concedi accesso limitato allo stesso host e indica una lista
+   di azioni: ad esempio verifiche, restart, backup, aggiornamento. Ogni allargamento di scope,
+   pubblicazione digest, download di modello, cambio permessi, lettura dati privati o operazione
+   distruttiva (`wipe`, `prune`, restore, eliminazione workspace/volumi) richiede consenso specifico.
+
+L'API admin concede privilegi globali: non esistono token agent read-only o per workspace.
+Non darle a un agente non fidato. Puoi revocare sessione/harness/SSH e ruotare la password admin;
+le credenziali piattaforma vanno revocate separatamente. Questa guida abilita un percorso,
+non dichiara che l'agente abbia già installato o controllato il tuo sistema.
+
+## Backup, aggiornamenti e troubleshooting
+
+Vedi [operazioni](docs/operations.md) per procedure complete di backup, restore e retention.
+Prima di aggiornare salva database, `.env`, `config/sources.toml` e sessioni Telegram in un
+backup protetto. I volumi persistono ai restart; **`docker compose down -v` elimina i dati**.
+
+```bash
+# Dopo backup; fermare i writer durante migration/aggiornamento
+ docker compose stop worker web
+ git pull --ff-only
+ docker compose build
+ docker compose run --rm web gnosis db-init
+ docker compose up -d --force-recreate
+```
+
+**Installazioni esistenti:** aggiungi `POSTGRES_PASSWORD` con la password **attuale** del
+PostgreSQL e mantieni coerente `DATABASE_URL`. La variabile non modifica utenti in un volume già
+inizializzato. Se la password è ancora `gnosis`, ruotala con `\password gnosis` in una sessione
+`docker compose exec db psql -U gnosis`, poi aggiorna entrambi i campi e ricrea web/worker; effettua
+prima un backup. Configura mapping e ruoli workspace: il vecchio fallback globale Discord è rimosso.
+
+| Sintomo | Controllo / soluzione |
+|---|---|
+| Docker/Compose non disponibile | Installa il plugin >= 2.30, controlla daemon e permessi; non fare chmod sul socket |
+| `permission denied` salvando config | Verifica owner host, GID 10001 e permessi dei tre path sopra; evita 666/777 |
+| Worker in errore senza chiave | Imposta API reale o dummy `local` + endpoint locale, poi ricrea i container |
+| Modello chat non trovato / 429 | Verifica nome modello, endpoint, quote e fatturazione del provider; subscription agent ≠ API |
+| Canali non visibili / messaggi vuoti | Token bot, invito, View Channel/History, Message Content Intent e pagina Stato |
+| `/ask` nega accesso | ID server, workspace, ruoli non vuoti e ruolo del membro; nessun fallback globale |
+| Fonti non raccolte dopo salvataggio | Riavvia worker; la selezione workspace non abilita da sola un canale |
+| Nessun risultato | Messaggi processati, argomenti/filtro, sorgenti abilitate e workspace corretto |
+| Digest non disponibile | Nessun messaggio nella settimana precedente o citazioni oggi non accessibili |
+| Database authentication failed | Password di utente esistente e DATABASE_URL devono coincidere; non eliminare il volume |
+| URL locale modelli irraggiungibile | Loopback del container non è l'host; verifica rete privata/servizio modello |
+
+## Sviluppo e verifiche offline
 
 ```bash
 python -m venv .venv
-. .venv/bin/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-ruff check .
-ruff format --check .
-pytest
+. .venv/bin/activate  # PowerShell: .venv\Scripts\Activate.ps1
+pip install -e '.[dev]'
+python -m ruff check .
+python -m ruff format --check .
+python -m pytest -q
+node tests/frontend.cjs
+bash tests/install-selfcheck.sh
+bash -n install.sh
 ```
 
-The CI workflow runs linting, tests, and a Docker image build on every push and pull request.
+Frontend senza dipendenze/build tool. I test mockano DB, provider e Discord: nessuna chiamata
+Discord, download modelli o deploy. Su un database di test autorizzato, `gnosis selfcheck`
+applica migration, crea fixture dal prefisso univoco e le cancella; non cambia l'allowlist reale.
+È una verifica SQL, non un controllo completamente read-only: chiedi permesso prima di eseguirlo.
+Prestazioni su grandi archivi e comportamenti live delle piattaforme vanno verificati nel tuo ambiente.
 
-## Documentation
-
-- [Product brief](docs/product-brief.md)
-- [Dashboard shell](docs/dashboard-shell.md) — how the shell is built and what to share with the other bots
-- [Platform setup](docs/setup-platforms.md)
-- [Operations, backup, and retention](docs/operations.md)
-- [Implementation plan](IMPLEMENTATION_PLAN.md)
-
----
-
-## 📄 License
-
-MIT © PrimeBuild — see [LICENSE](LICENSE) for details.
-
-<sub>Built for private, evidence-backed community research.</sub>
+Altri riferimenti: [dashboard](docs/dashboard-shell.md), [product brief](docs/product-brief.md),
+[config esempio](.env.example), [licenza](LICENSE).

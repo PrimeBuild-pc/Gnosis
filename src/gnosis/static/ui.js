@@ -17,12 +17,15 @@ const el = (tag, options = {}) => {
   if (options.className) node.className = options.className;
   if (options.id) node.id = options.id;
   if (options.type) node.type = options.type;
+  if (tag === 'p' && options.className === 'hint') node.setAttribute('role', 'status');
   if (options.html === true) throw new Error('mai HTML da stringa');
   return node;
 };
 
 const showError = (element, error) => {
-  element.replaceChildren(el('p', {className: 'error', text: `${t('error')}: ${error.message}`}));
+  const message = el('p', {className: 'error', text: `${t('error')}: ${error.message}`});
+  message.setAttribute('role', 'alert');
+  element.replaceChildren(message);
 };
 
 /** Intestazione del modulo: titolo e una riga che dice a cosa serve la pagina. */
@@ -56,14 +59,21 @@ const field = ({id, labelKey, helpKey, value = '', secret = false, placeholder =
     const info = el('button', {className: 'info', text: 'i', type: 'button'});
     info.title = t('settings.info');
     info.setAttribute('aria-label', t('settings.info'));
-    info.addEventListener('click', () => { help.hidden = !help.hidden; });
+    help.id = `${id}-help`;
+    info.setAttribute('aria-controls', help.id);
+    info.setAttribute('aria-expanded', 'false');
+    info.addEventListener('click', () => {
+      help.hidden = !help.hidden;
+      info.setAttribute('aria-expanded', String(!help.hidden));
+    });
     header.append(info);
   }
 
   const input = el('input', {id});
   input.dataset.key = id.replace(/^config-/, '');
   input.placeholder = placeholder || value || '—';
-  if (secret) input.type = 'password';
+  if (secret) { input.type = 'password'; input.autocomplete = 'new-password'; }
+  if (helpKey) input.setAttribute('aria-describedby', help.id);
 
   wrapper.append(header);
   if (helpKey) wrapper.append(help);
@@ -78,6 +88,13 @@ const listRow = (title, detail) => {
   if (detail) grow.append(el('p', {className: 'hint', text: detail}));
   row.append(grow);
   return row;
+};
+
+const safeSourceURL = value => {
+  try {
+    const url = new URL(value);
+    return ['https:', 'http:'].includes(url.protocol) ? url.href : null;
+  } catch { return null; }
 };
 
 const emptyState = key => el('p', {className: 'empty', text: t(key)});

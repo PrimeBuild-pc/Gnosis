@@ -41,12 +41,12 @@ async def run(settings: Settings, rag: RAG, db: Database) -> None:
 
     @client.on(events.NewMessage(pattern="/start"))
     async def on_start(event: events.NewMessage.Event) -> None:
-        if is_authorized(event.sender_id, allowed):
+        if event.is_private and is_authorized(event.sender_id, allowed):
             await event.reply("Ciao! Usa /ask <domanda> oppure /digest.")
 
     @client.on(events.NewMessage(pattern=r"/ask(?:\s+(.+))?"))
     async def on_ask(event: events.NewMessage.Event) -> None:
-        if not is_authorized(event.sender_id, allowed):
+        if not event.is_private or not is_authorized(event.sender_id, allowed):
             return
         question = (event.pattern_match.group(1) or "").strip()
         if not question:
@@ -61,7 +61,7 @@ async def run(settings: Settings, rag: RAG, db: Database) -> None:
 
     @client.on(events.NewMessage(pattern="/digest"))
     async def on_digest(event: events.NewMessage.Event) -> None:
-        if not is_authorized(event.sender_id, allowed):
+        if not event.is_private or not is_authorized(event.sender_id, allowed):
             return
         digests = db.list_digests(limit=1)
         if not digests:

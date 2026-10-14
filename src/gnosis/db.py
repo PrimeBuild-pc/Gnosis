@@ -271,7 +271,7 @@ class Database:
                     SELECT m.*, s.platform, s.external_id AS source_external_id,
                            s.name AS source_name, s.topics AS source_topics
                     FROM messages m JOIN sources s ON s.id = m.source_id
-                    WHERE m.status IN ('pending', 'failed')
+                    WHERE s.enabled AND m.status IN ('pending', 'failed')
                     ORDER BY m.sent_at
                     LIMIT %s
                     """,
@@ -291,14 +291,15 @@ class Database:
         with self.connection() as connection:
             connection.execute("DELETE FROM chunks WHERE message_id = %s", (message_id,))
             if chunks:
-                connection.executemany(
-                    "INSERT INTO chunks (message_id, position, text, embedding) "
-                    "VALUES (%s, %s, %s, %s)",
-                    [
-                        (message_id, position, text, Vector(embedding))
-                        for position, (text, embedding) in enumerate(chunks)
-                    ],
-                )
+                with connection.cursor() as cursor:
+                    cursor.executemany(
+                        "INSERT INTO chunks (message_id, position, text, embedding) "
+                        "VALUES (%s, %s, %s, %s)",
+                        [
+                            (message_id, position, text, Vector(embedding))
+                            for position, (text, embedding) in enumerate(chunks)
+                        ],
+                    )
             connection.execute(
                 """
                 UPDATE messages SET relevance = %s, tags = %s, kind = %s, status = %s,
@@ -322,21 +323,37 @@ class Database:
         embedding: list[float],
         limit: int = 12,
         workspace_id: int | None = None,
+        *,
+        discord_guild_id: str | None = None,
+        source_external_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """workspace_id None = tutte le fonti, cioe' il comportamento storico. Con un
-        workspace, le citazioni possono provenire solo dalle sue sorgenti."""
+        """Filtra prima del ranking: i migliori risultati devono essere nel contesto."""
+        if discord_guild_id is not None and (workspace_id is None or source_external_ids is None):
+            raise ValueError("Contesto Discord incompleto")
+        # Scoped exact ranking avoids ANN candidates from other workspaces starving results.
+        materialization = "MATERIALIZED" if workspace_id is not None else "NOT MATERIALIZED"
         with self.connection() as connection:
             return list(
                 connection.execute(
-                    """
-                    WITH semantic AS (
+                    f"""
+                    WITH eligible AS {materialization} (
+                        SELECT c.* FROM chunks c
+                        JOIN messages m ON m.id = c.message_id
+                        JOIN sources s ON s.id = m.source_id
+                        WHERE s.enabled AND m.status = 'processed'
+                          AND (%s::bigint IS NULL OR s.workspace_id = %s)
+                          AND (%s::text IS NULL OR (
+                              s.platform = 'discord' AND m.metadata->>'guild_id' = %s
+                              AND s.external_id = ANY(%s::text[])
+                          ))
+                    ), semantic AS (
                         SELECT id, row_number() OVER (ORDER BY embedding <=> %s) AS rank
-                        FROM chunks ORDER BY embedding <=> %s LIMIT 30
+                        FROM eligible ORDER BY embedding <=> %s LIMIT 30
                     ), lexical AS (
                         SELECT id, row_number() OVER (
                             ORDER BY ts_rank_cd(search_document, websearch_to_tsquery('simple', %s)) DESC
                         ) AS rank
-                        FROM chunks
+                        FROM eligible
                         WHERE search_document @@ websearch_to_tsquery('simple', %s)
                         ORDER BY ts_rank_cd(search_document, websearch_to_tsquery('simple', %s)) DESC
                         LIMIT 30
@@ -354,22 +371,44 @@ class Database:
                     JOIN chunks c ON c.id = scores.id
                     JOIN messages m ON m.id = c.message_id
                     JOIN sources s ON s.id = m.source_id
-                    WHERE s.enabled AND (%s::bigint IS NULL OR s.workspace_id = %s)
                     ORDER BY scores.score + 0.002 / (1 + EXTRACT(EPOCH FROM (now() - m.sent_at)) / 2592000) DESC
                     LIMIT %s
                     """,
                     (
+                        workspace_id,
+                        workspace_id,
+                        discord_guild_id,
+                        discord_guild_id,
+                        source_external_ids,
                         Vector(embedding),
                         Vector(embedding),
                         query,
                         query,
                         query,
-                        workspace_id,
-                        workspace_id,
                         limit,
                     ),
                 ).fetchall()
             )
+
+    def accessible_discord_messages(
+        self,
+        message_ids: set[int],
+        workspace_id: int,
+        guild_id: str,
+        channel_ids: list[str],
+    ) -> set[int]:
+        """Verifica anche i digest salvati contro appartenenza e permessi attuali."""
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT m.id FROM messages m JOIN sources s ON s.id = m.source_id
+                WHERE m.id = ANY(%s::bigint[]) AND m.status = 'processed'
+                  AND s.enabled AND s.workspace_id = %s AND s.platform = 'discord'
+                  AND m.metadata->>'guild_id' = %s AND s.external_id = ANY(%s::text[])
+                """,
+                (list(message_ids), workspace_id, guild_id, channel_ids),
+            ).fetchall()
+            return {row["id"] for row in rows}
 
     def messages_between(
         self, start: datetime, end: datetime, workspace_id: int | None = None
@@ -381,12 +420,16 @@ class Database:
                     SELECT m.id, m.author, m.sent_at, m.text, m.url, m.kind, m.tags,
                            m.relevance, s.platform, s.name AS source_name
                     FROM messages m JOIN sources s ON s.id = m.source_id
+                    LEFT JOIN workspaces w ON w.id = s.workspace_id
                     WHERE s.enabled AND m.status = 'processed'
                       AND m.sent_at >= %s AND m.sent_at < %s
                       AND (%s::bigint IS NULL OR s.workspace_id = %s)
+                      AND (%s::bigint IS NULL OR w.platform IS DISTINCT FROM 'discord'
+                           OR (s.platform = 'discord'
+                               AND w.external_id = m.metadata->>'guild_id'))
                     ORDER BY m.sent_at
                     """,
-                    (start, end, workspace_id, workspace_id),
+                    (start, end, workspace_id, workspace_id, workspace_id),
                 ).fetchall()
             )
 
@@ -397,20 +440,22 @@ class Database:
         markdown: str,
         source_count: int,
         workspace_id: int | None = None,
+        message_ids: list[int] | None = None,
     ) -> int:
         with self.connection() as connection:
             row = connection.execute(
                 """
                 INSERT INTO digests
-                    (period_start, period_end, markdown, source_count, workspace_id)
-                VALUES (%s, %s, %s, %s, %s)
+                    (period_start, period_end, markdown, source_count, workspace_id, message_ids)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (workspace_id, period_start, period_end) DO UPDATE SET
                     markdown = EXCLUDED.markdown,
                     source_count = EXCLUDED.source_count,
+                    message_ids = EXCLUDED.message_ids,
                     created_at = now()
                 RETURNING id
                 """,
-                (start, end, markdown, source_count, workspace_id),
+                (start, end, markdown, source_count, workspace_id, message_ids or []),
             ).fetchone()
             return row["id"]
 

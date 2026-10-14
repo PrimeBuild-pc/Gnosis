@@ -47,9 +47,9 @@ def test_workspace_roles_win_over_global_allowlist():
     assert not is_authorized([99], roles)
 
 
-def test_global_allowlist_used_when_workspace_has_no_roles():
-    assert allowed_roles_for(None, frozenset({99})) == frozenset({99})
-    assert allowed_roles_for({"allowed_role_ids": []}, frozenset({99})) == frozenset({99})
+def test_unmapped_server_and_empty_roles_deny_even_global_roles():
+    assert allowed_roles_for(None, frozenset({99})) == frozenset()
+    assert allowed_roles_for({"allowed_role_ids": []}, frozenset({99})) == frozenset()
 
 
 def test_digest_goes_to_the_workspace_webhook(monkeypatch: pytest.MonkeyPatch):

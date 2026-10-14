@@ -67,11 +67,15 @@ const renderChat = async container => {
   form.append(label, submit);
 
   const answer = el('div', {className: 'card answer'});
+  answer.setAttribute('role', 'status');
+  answer.setAttribute('aria-live', 'polite');
   answer.hidden = true;
   container.append(form, answer);
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    submit.disabled = true;
+    answer.setAttribute('aria-busy', 'true');
     answer.hidden = false;
     answer.replaceChildren(el('p', {className: 'hint', text: t('chat.searching')}));
     try {
@@ -84,10 +88,11 @@ const renderChat = async container => {
         const list = el('ul', {className: 'citation-list'});
         data.sources.forEach(source => {
           const item = el('li');
-          const text = `[M${source.id}] ${source.platform} · ${source.community} — ${source.author}`;
-          if (source.url) {
+          const text = `[${source.id}] ${source.platform} · ${source.community} — ${source.author}`;
+          const url = safeSourceURL(source.url);
+          if (url) {
             const link = el('a', {text});
-            link.href = source.url;
+            link.href = url;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
             item.append(link);
@@ -99,6 +104,7 @@ const renderChat = async container => {
         answer.append(el('p', {className: 'hint faint', text: t('chat.noSources')}));
       }
     } catch (error) { showError(answer, error); }
+    finally { submit.disabled = false; answer.setAttribute('aria-busy', 'false'); }
   });
 };
 
@@ -133,12 +139,14 @@ const renderDigests = async container => {
 
   refresh.addEventListener('click', load);
   run.addEventListener('click', async () => {
+    run.disabled = true;
     status.textContent = t('digests.running');
     try {
       const data = await request(`/api/digests/run${AppState.scopeQuery()}`, {method: 'POST'});
       status.textContent = data.id ? '' : t('digests.noMessages');
       load();
     } catch (error) { showError(status, error); }
+    finally { run.disabled = false; }
   });
   load();
 };
@@ -202,12 +210,12 @@ const renderPlatform = platform => async container => {
       });
       const webhook = field({
         id: 'ws-webhook', labelKey: 'workspace.webhook', helpKey: 'workspace.webhookHelp',
+        value: workspace.digest_webhook || '', secret: true,
       });
       const external = field({
         id: 'ws-external', labelKey: 'workspace.externalId', helpKey: 'workspace.externalIdHelp',
       });
       roles.querySelector('input').value = (workspace.allowed_role_ids || []).join(',');
-      webhook.querySelector('input').value = workspace.digest_webhook || '';
       external.querySelector('input').value = workspace.external_id || '';
       const save = el('button', {className: 'primary', text: t('workspace.save'), type: 'submit'});
       const result = el('p', {className: 'hint'});
@@ -225,10 +233,11 @@ const renderPlatform = platform => async container => {
               external_id: external.querySelector('input').value.trim() || null,
               allowed_role_ids: roles.querySelector('input').value
                 .split(',').map(v => v.trim()).filter(Boolean),
-              digest_webhook: webhook.querySelector('input').value.trim(),
+              ...(webhook.querySelector('input').value.trim()
+                ? {digest_webhook: webhook.querySelector('input').value.trim()} : {}),
             }),
           });
-          result.textContent = t('settings.savedRestart');
+          result.textContent = t('settings.savedLive');
           Shell.reloadWorkspaces();
         } catch (error) { showError(result, error); }
       });
@@ -404,6 +413,7 @@ const renderGraph = async container => {
   const form = el('form');
   const input = el('input');
   input.placeholder = t('graph.search');
+  input.setAttribute('aria-label', t('graph.search'));
   form.append(input, el('button', {className: 'primary', text: t('graph.submit'), type: 'submit'}));
   const list = el('div');
   const detail = el('div');
@@ -415,14 +425,26 @@ const renderGraph = async container => {
       if (!data.length) { list.replaceChildren(emptyState('graph.none')); return; }
       list.replaceChildren(...data.map(entity => {
         const row = listRow(entity.name, `${entity.type} · ${entity.mentions} ${t('graph.mentions')}`);
-        row.style.cursor = 'pointer';
-        row.addEventListener('click', async () => {
+        const open = el('button', {className: 'ghost', text: entity.name, type: 'button'});
+        row.append(open);
+        open.addEventListener('click', async () => {
           try {
             const full = await request(`/api/entities/${entity.id}`);
             detail.replaceChildren(card());
             const box = detail.firstChild;
-            box.append(el('h3', {text: `${full.name} · ${full.type}`}));
-            (full.mentions || []).forEach(m => box.append(listRow(m.text, m.source_name || '')));
+            box.append(el('h3', {text: `${full.entity.name} · ${full.entity.type}`}));
+            (full.mentions || []).forEach(m => {
+              const mention = listRow(m.source_name, `${m.author} · ${new Date(m.sent_at).toLocaleString(currentLanguage)}`);
+              const url = safeSourceURL(m.url);
+              if (url) {
+                const link = el('a', {text: `M${m.id}`});
+                link.href = url;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                mention.append(link);
+              }
+              box.append(mention);
+            });
           } catch (error) { showError(detail, error); }
         });
         return row;
