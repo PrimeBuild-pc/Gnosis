@@ -44,4 +44,8 @@ assert.equal((css.match(/{/g) || []).length, (css.match(/}/g) || []).length);
 const html = fs.readFileSync(path.join(__dirname, '../src/gnosis/static/index.html'), 'utf8');
 assert.ok(html.includes('class="skip-link"'));
 assert.ok(html.includes('for="workspace-select"'));
+// This frontend loads every script directly from index.html; stale bundles must not ship.
+const scripts = fs.readdirSync(path.join(__dirname, '../src/gnosis/static')).filter(file => file.endsWith('.js'));
+const loaded = [...html.matchAll(/<script\b[^>]*\bsrc="\/([^"/]+\.js)"/g)].map(match => match[1]);
+assert.deepEqual(scripts.sort(), loaded.sort());
 console.log('frontend contracts: OK');

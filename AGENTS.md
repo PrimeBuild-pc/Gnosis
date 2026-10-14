@@ -16,5 +16,8 @@
 - Controllo dopo consenso: CLI `gnosis`/Docker Compose, API admin autenticata `/docs` o browser
   con sessione autorizzata. Nessun nuovo token globale, MCP o Docker socket nel container.
   API admin e bot Telegram hanno visibilità globale: solo agenti/operatori fidati.
+- Mantieni I/O delle piattaforme asincrono in `collectors/`, configurazione immutabile in
+  `config.py` e persistenza in `db.py` con migration SQL numerate in `migrations/`.
+  Lo schema si aggiorna tramite CLI, non durante l'avvio web.
 - Verifica callers e regression test per ogni cambio di scope/config. Riporta esiti e ciò
   che resta non verificato; abbonamenti coding agent non includono credito API del modello chat.

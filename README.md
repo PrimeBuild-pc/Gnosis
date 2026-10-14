@@ -359,5 +359,5 @@ applica migration, crea fixture dal prefisso univoco e le cancella; non cambia l
 È una verifica SQL, non un controllo completamente read-only: chiedi permesso prima di eseguirlo.
 Prestazioni su grandi archivi e comportamenti live delle piattaforme vanno verificati nel tuo ambiente.
 
-Altri riferimenti: [dashboard](docs/dashboard-shell.md), [product brief](docs/product-brief.md),
+Altri riferimenti: [architettura dashboard](docs/dashboard-shell.md),
 [config esempio](.env.example), [licenza](LICENSE).

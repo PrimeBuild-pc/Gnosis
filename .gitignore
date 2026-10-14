@@ -17,3 +17,9 @@ build/
 *.session-journal
 data/
 config/sources.toml
+.verification/
+.coverage.*
+coverage.xml
+*.log
+.claude/settings.local.json
+.DS_Store
