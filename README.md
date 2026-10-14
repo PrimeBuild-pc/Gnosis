@@ -1,3 +1,35 @@
+<p align="center">
+  <img src="docs/assets/in-development.svg" alt="In sviluppo" width="420">
+</p>
+
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="Gnosis — knowledge base privata per community" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/commits/main"><img alt="Ultimo commit" src="https://img.shields.io/github/last-commit/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=git&amp;logoColor=white"></a>
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/stargazers"><img alt="Stelle GitHub" src="https://img.shields.io/github/stars/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/issues"><img alt="Issue aperte" src="https://img.shields.io/github/issues/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/PrimeBuild-pc/Gnosis/ci.yml?branch=main&amp;style=plastic&amp;logo=githubactions&amp;label=CI"></a>
+  <a href="LICENSE"><img alt="Licenza MIT" src="https://img.shields.io/badge/license-MIT-2ea44f?style=plastic"></a>
+  <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-your%20infrastructure-2dd4a7?style=plastic">
+  <img alt="Privacy-first" src="https://img.shields.io/badge/privacy-first-2dd4a7?style=plastic">
+</p>
+
+<p align="center">
+  <img alt="Python 3.11 o successivo" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=plastic&amp;logo=python&amp;logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-API-009688?style=plastic&amp;logo=fastapi&amp;logoColor=white">
+  <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=plastic&amp;logo=postgresql&amp;logoColor=white">
+  <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=plastic&amp;logo=docker&amp;logoColor=white">
+</p>
+
+<p align="center"><i>Raccogli contenuti autorizzati, cerca nelle fonti e ottieni risposte con citazioni ai messaggi originali.</i></p>
+
+---
+
 # Gnosis
 
 Knowledge base privata per contenuti autorizzati di Discord, Telegram e Reddit: raccolta,
