@@ -1,9 +1,8 @@
-// Moduli di Gnosis. Ognuno disegna una pagina intera dentro il contenitore del guscio.
-// Il guscio non sa nulla di cosa facciano: conosce solo id, gruppo, icona ed etichetta.
+// Each Gnosis module renders a page; the shell only knows its ID, group, icon and label.
 
 const PLATFORMS = ['discord', 'telegram', 'reddit'];
 
-// ---------------------------------------------------------------- panoramica
+// ---------------------------------------------------------------- overview
 
 const renderOverview = async container => {
   container.append(moduleHead('nav.overview', 'settings.setupIntro'));
@@ -19,13 +18,13 @@ const renderOverview = async container => {
     const workspace = AppState.currentWorkspace();
     summary.append(el('p', {
       className: 'hint',
-      text: t('overview.counts', {
+      text: () => t('overview.counts', {
         sources: stats.sources, messages: stats.messages, digests: stats.digests,
       }),
     }));
     summary.append(el('p', {
       className: 'hint faint',
-      text: workspace ? t('overview.scoped', {name: workspace.name}) : t('overview.global'),
+      text: () => workspace ? t('overview.scoped', {name: workspace.name}) : t('overview.global'),
     }));
     box.append(summary);
 
@@ -35,15 +34,17 @@ const renderOverview = async container => {
       row.append(el('span', {className: 'step-mark', text: step.ready ? '✓' : '○'}));
       const body = el('div', {className: 'step-body'});
       body.append(el('strong', {
-        text: t(`setup.${step.key}`) + (step.required ? ` · ${t('settings.required')}` : ''),
+        text: () => step.required ? t('setup.requiredLabel', {name: t(`setup.${step.key}`)}) : t(`setup.${step.key}`),
       }));
-      let state;
-      if (!step.ready) state = `${t('settings.missing')} ${step.fields.join(', ')}`;
-      else if (step.sources === 0) state = t('settings.noSources');
-      else if (step.sources) state = t('settings.sourcesActive', {n: step.sources});
-      else state = t('settings.ready');
-      body.append(el('p', {className: 'hint', text: state}));
-      body.append(el('p', {className: 'hint faint', text: t(`setup.${step.key}.hint`)}));
+      body.append(el('p', {className: 'hint', text: () => {
+        if (!step.ready) return t('setup.missingFields', {
+          fields: step.fields.map(key => t(`field.${key}.label`)).join(', '),
+        });
+        if (step.sources === 0) return t('settings.noSources');
+        if (step.sources) return t('settings.sourcesActive', {n: step.sources});
+        return t('settings.ready');
+      }}));
+      body.append(el('p', {className: 'hint faint', text: () => t(`setup.${step.key}.hint`)}));
       row.append(body);
       checklist.append(row);
     });
@@ -57,13 +58,13 @@ const renderChat = async container => {
   container.append(moduleHead('nav.chat', 'chat.intro'));
 
   const form = el('form');
-  const label = el('label', {text: t('chat.question')});
+  const label = el('label', {text: () => t('chat.question')});
   const textarea = el('textarea');
   textarea.maxLength = 4000;
   textarea.required = true;
-  textarea.placeholder = t('chat.placeholder');
+  bindLocale(textarea, () => { textarea.placeholder = t('chat.placeholder'); });
   label.append(textarea);
-  const submit = el('button', {className: 'primary', text: t('chat.submit'), type: 'submit'});
+  const submit = el('button', {className: 'primary', text: () => t('chat.submit'), type: 'submit'});
   form.append(label, submit);
 
   const answer = el('div', {className: 'card answer'});
@@ -77,11 +78,11 @@ const renderChat = async container => {
     submit.disabled = true;
     answer.setAttribute('aria-busy', 'true');
     answer.hidden = false;
-    answer.replaceChildren(el('p', {className: 'hint', text: t('chat.searching')}));
+    answer.replaceChildren(el('p', {className: 'hint', text: () => t('chat.searching')}));
     try {
       const data = await request('/api/chat', {
         method: 'POST',
-        body: JSON.stringify({question: textarea.value, workspace_id: AppState.workspaceId()}),
+        body: JSON.stringify({question: textarea.value, workspace_id: AppState.workspaceId(), locale: currentLanguage}),
       });
       answer.replaceChildren(el('p', {text: data.answer}));
       if (data.sources.length) {
@@ -101,7 +102,7 @@ const renderChat = async container => {
         });
         answer.append(list);
       } else {
-        answer.append(el('p', {className: 'hint faint', text: t('chat.noSources')}));
+        answer.append(el('p', {className: 'hint faint', text: () => t('chat.noSources')}));
       }
     } catch (error) { showError(answer, error); }
     finally { submit.disabled = false; answer.setAttribute('aria-busy', 'false'); }
@@ -114,8 +115,8 @@ const renderDigests = async container => {
   container.append(moduleHead('nav.digests', 'digests.intro'));
 
   const actions = el('div', {className: 'row actions'});
-  const run = el('button', {className: 'primary', text: t('digests.run')});
-  const refresh = el('button', {className: 'ghost', text: t('digests.refresh')});
+  const run = el('button', {className: 'primary', text: () => t('digests.run')});
+  const refresh = el('button', {className: 'ghost', text: () => t('digests.refresh')});
   actions.append(run, refresh);
   const status = el('p', {className: 'hint'});
   const list = el('div');
@@ -127,9 +128,11 @@ const renderDigests = async container => {
       if (!data.length) { list.replaceChildren(emptyState('digests.empty')); return; }
       list.replaceChildren(...data.map(digest => {
         const article = el('article');
-        const period = new Date(digest.period_start).toLocaleDateString(currentLanguage);
         article.append(el('strong', {
-          text: digest.workspace_name ? `${period} · ${digest.workspace_name}` : period,
+          text: () => {
+            const period = formatDate(digest.period_date || digest.period_start, true);
+            return digest.workspace_name ? `${period} · ${digest.workspace_name}` : period;
+          },
         }));
         article.append(el('p', {text: digest.markdown}));
         return article;
@@ -140,10 +143,10 @@ const renderDigests = async container => {
   refresh.addEventListener('click', load);
   run.addEventListener('click', async () => {
     run.disabled = true;
-    status.textContent = t('digests.running');
+    setText(status, () => t('digests.running'));
     try {
       const data = await request(`/api/digests/run${AppState.scopeQuery()}`, {method: 'POST'});
-      status.textContent = data.id ? '' : t('digests.noMessages');
+      setText(status, () => data.id ? '' : t('digests.noMessages'));
       load();
     } catch (error) { showError(status, error); }
     finally { run.disabled = false; }
@@ -151,9 +154,9 @@ const renderDigests = async container => {
   load();
 };
 
-// ---------------------------------------------------------------- piattaforma
+// ---------------------------------------------------------------- platform
 
-/** Una pagina per piattaforma: credenziali, impostazioni del server scelto, canali seguiti. */
+/** One page per platform: credentials, selected server settings and collected channels. */
 const renderPlatform = platform => async container => {
   container.append(moduleHead(`section.${platform}`, `section.${platform}.intro`));
 
@@ -164,7 +167,7 @@ const renderPlatform = platform => async container => {
   if (platform === 'discord') container.append(serverCard);
   container.append(sourcesCard);
 
-  // --- credenziali della sola piattaforma ---
+  // --- platform credentials ---
   try {
     const fields = (await request('/api/config')).filter(item => item.section === platform);
     const form = el('form');
@@ -175,10 +178,10 @@ const renderPlatform = platform => async container => {
       value: item.value,
       secret: item.secret,
     })));
-    const save = el('button', {className: 'primary', text: t('settings.save'), type: 'submit'});
+    const save = el('button', {className: 'primary', text: () => t('settings.save'), type: 'submit'});
     const result = el('p', {className: 'hint'});
     form.append(save);
-    credentials.append(el('p', {className: 'hint faint', text: t('settings.maskNote')}), form, result);
+    credentials.append(el('p', {className: 'hint faint', text: () => t('settings.maskNote')}), form, result);
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
@@ -186,24 +189,22 @@ const renderPlatform = platform => async container => {
       form.querySelectorAll('input').forEach(input => {
         if (input.value.trim()) values[input.dataset.key] = input.value.trim();
       });
-      if (!Object.keys(values).length) { result.textContent = t('settings.noChange'); return; }
+      if (!Object.keys(values).length) { setText(result, () => t('settings.noChange')); return; }
       try {
         const saved = await request('/api/config', {method: 'POST', body: JSON.stringify({values})});
-        result.textContent = saved.restart_required
-          ? t('settings.savedRestart') : t('settings.savedLive');
+        setText(result, () => t(saved.restart_required ? 'settings.savedRestart' : 'settings.savedLive'));
         form.querySelectorAll('input').forEach(input => { input.value = ''; });
       } catch (error) { showError(result, error); }
     });
   } catch (error) { showError(credentials, error); }
 
-  // --- impostazioni del server selezionato (solo Discord: ruoli e digest) ---
+  // --- selected Discord server: roles and digest ---
   if (platform === 'discord') {
     const workspace = AppState.currentWorkspace();
     if (!workspace) {
-      serverCard.append(el('p', {className: 'hint callout', text: t('platform.pickServer')}));
+      serverCard.append(el('p', {className: 'hint callout', text: () => t('platform.pickServer')}));
     } else {
-      serverCard.querySelector('h3').textContent =
-        `${t('platform.serverSettings')} · ${workspace.name}`;
+      setText(serverCard.querySelector('h3'), () => t('platform.serverTitle', {name: workspace.name}));
       const form = el('form');
       const roles = field({
         id: 'ws-roles', labelKey: 'workspace.roles', helpKey: 'workspace.rolesHelp',
@@ -217,7 +218,7 @@ const renderPlatform = platform => async container => {
       });
       roles.querySelector('input').value = (workspace.allowed_role_ids || []).join(',');
       external.querySelector('input').value = workspace.external_id || '';
-      const save = el('button', {className: 'primary', text: t('workspace.save'), type: 'submit'});
+      const save = el('button', {className: 'primary', text: () => t('workspace.save'), type: 'submit'});
       const result = el('p', {className: 'hint'});
       form.append(external, roles, webhook, save);
       serverCard.append(form, result);
@@ -237,16 +238,16 @@ const renderPlatform = platform => async container => {
                 ? {digest_webhook: webhook.querySelector('input').value.trim()} : {}),
             }),
           });
-          result.textContent = t('settings.savedLive');
+          setText(result, () => t('settings.savedLive'));
           Shell.reloadWorkspaces();
         } catch (error) { showError(result, error); }
       });
     }
   }
 
-  // --- canali seguiti su questa piattaforma ---
+  // --- collected channels on this platform ---
   const list = el('div');
-  sourcesCard.append(el('p', {className: 'hint callout accent', text: t('sources.commandNote')}));
+  sourcesCard.append(el('p', {className: 'hint callout accent', text: () => t('sources.commandNote')}));
   sourcesCard.append(list);
 
   const loadSources = async () => {
@@ -257,28 +258,30 @@ const renderPlatform = platform => async container => {
           || source.workspace_id === AppState.workspaceId());
       if (!mine.length) { list.replaceChildren(emptyState('sources.none')); return; }
       list.replaceChildren(...mine.map(source => {
-        const detail = [
+        const detail = () => [
           source.workspace_name || t('workspace.all'),
           (source.topics || []).join(', ') || t('sources.noTopics'),
         ].join(' · ');
         const row = listRow(source.name, detail);
         const toggle = el('button', {
           className: 'small ghost',
-          text: source.enabled ? t('sources.disable') : t('sources.enable'),
+          text: () => t(source.enabled ? 'sources.disable' : 'sources.enable'),
         });
         toggle.addEventListener('click', async () => {
-          await request('/api/sources', {
-            method: 'POST',
-            body: JSON.stringify({
-              platform: source.platform,
-              external_id: source.external_id,
-              name: source.name,
-              enabled: !source.enabled,
-              workspace: source.workspace_name || '',
-              topics: source.topics || [],
-            }),
-          });
-          loadSources();
+          try {
+            await request('/api/sources', {
+              method: 'POST',
+              body: JSON.stringify({
+                platform: source.platform,
+                external_id: source.external_id,
+                name: source.name,
+                enabled: !source.enabled,
+                workspace: source.workspace_name || '',
+                topics: source.topics || [],
+              }),
+            });
+            loadSources();
+          } catch (error) { showError(result, error); }
         });
         row.append(el('span', {className: source.enabled ? 'dot on' : 'dot off'}), toggle);
         return row;
@@ -286,9 +289,9 @@ const renderPlatform = platform => async container => {
     } catch (error) { showError(list, error); }
   };
 
-  // --- aggiunta guidata: tendina dei canali che il bot vede davvero ---
+  // --- discovery dropdown: only channels actually visible to the bot ---
   const form = el('form');
-  const pickLabel = el('label', {text: t('sources.pick')});
+  const pickLabel = el('label', {text: () => t('sources.pick')});
   const pick = el('select');
   pickLabel.append(pick);
   const pickHint = el('p', {className: 'hint'});
@@ -297,23 +300,25 @@ const renderPlatform = platform => async container => {
   const nameField = field({id: 'src-name', labelKey: 'sources.name'});
   const wsField = field({id: 'src-workspace', labelKey: 'sources.workspace', helpKey: 'sources.workspaceHelp'});
   const topicsField = field({id: 'src-topics', labelKey: 'sources.topics', helpKey: 'sources.topicsHelp'});
-  topicsField.querySelector('input').placeholder = 'AI, security';
+  bindLocale(topicsField.querySelector('input'), () => {
+    topicsField.querySelector('input').placeholder = t('sources.topicsPlaceholder');
+  });
 
-  const save = el('button', {className: 'primary', text: t('sources.save'), type: 'submit'});
+  const save = el('button', {className: 'primary', text: () => t('sources.save'), type: 'submit'});
   const result = el('p', {className: 'hint'});
   form.append(pickLabel, pickHint, idField, nameField, wsField, topicsField, save);
-  sourcesCard.append(el('h3', {text: t('sources.addTitle')}), form, result);
+  sourcesCard.append(el('h3', {text: () => t('sources.addTitle')}), form, result);
 
   if (platform !== 'reddit') {
     request(`/api/available-sources?platform=${platform}`).then(rows => {
-      const manual = el('option', {text: t('sources.pickManual')});
+      const manual = el('option', {text: () => t('sources.pickManual')});
       manual.value = '';
       if (!rows.length) {
         pick.replaceChildren(manual);
-        pickHint.textContent = t('sources.pickEmpty');
+        setText(pickHint, () => t('sources.pickEmpty'));
         return;
       }
-      const placeholder = el('option', {text: t('sources.pickPlaceholder')});
+      const placeholder = el('option', {text: () => t('sources.pickPlaceholder')});
       placeholder.value = '';
       pick.replaceChildren(placeholder, ...rows.map(row => {
         const option = el('option', {
@@ -324,11 +329,11 @@ const renderPlatform = platform => async container => {
         option.dataset.workspace = row.workspace_name || '';
         return option;
       }), manual);
-      pickHint.textContent = t('sources.pickFound', {n: rows.length});
+      setText(pickHint, () => t('sources.pickFound', {n: rows.length}));
     }).catch(error => showError(pickHint, error));
   } else {
     pickLabel.hidden = true;
-    pickHint.textContent = t('sources.redditManual');
+    setText(pickHint, () => t('sources.redditManual'));
   }
 
   pick.addEventListener('change', () => {
@@ -354,7 +359,7 @@ const renderPlatform = platform => async container => {
             .split(',').map(v => v.trim()).filter(Boolean),
         }),
       });
-      result.textContent = t('sources.saved');
+      setText(result, () => t('sources.saved'));
       form.querySelectorAll('input').forEach(input => { input.value = ''; });
       loadSources();
       Shell.reloadWorkspaces();
@@ -364,7 +369,7 @@ const renderPlatform = platform => async container => {
   loadSources();
 };
 
-// ---------------------------------------------------------------- stato
+// ---------------------------------------------------------------- status
 
 const renderStatus = async container => {
   container.append(moduleHead('nav.status', 'status.intro'));
@@ -375,7 +380,17 @@ const renderStatus = async container => {
   try {
     const data = await request('/api/status');
     data.workers.forEach(worker => {
-      const row = listRow(worker.component, worker.detail || t(`status.${worker.status}`));
+      const title = () => {
+        if (PLATFORMS.includes(worker.component)) return t(`section.${worker.component}`);
+        if (['pipeline', 'digest', 'retention', 'telegram_bot'].includes(worker.component)) {
+          return t(`status.component.${worker.component}`);
+        }
+        return worker.component;
+      };
+      const row = listRow(title, () => {
+        const state = t(['ok', 'error'].includes(worker.status) ? `status.${worker.status}` : 'status.unknown');
+        return worker.detail ? `${state} · ${worker.detail}` : state;
+      });
       row.prepend(el('span', {className: worker.status === 'ok' ? 'dot on' : 'dot warn'}));
       connectors.append(row);
     });
@@ -387,34 +402,36 @@ const renderStatus = async container => {
     });
     if (!visible.length) sources.append(emptyState('sources.none'));
     visible.forEach(source => {
-      const last = source.last_processed_at
-        ? new Date(source.last_processed_at).toLocaleString(currentLanguage)
-        : t('status.never');
       sources.append(listRow(
         `${source.platform} · ${source.name}`,
-        `${t('status.lastActivity')}: ${last} — ${source.pending} ${t('status.pending')}`,
+        () => t('status.activity', {
+          date: source.last_processed_at ? formatDate(source.last_processed_at) : t('status.never'),
+          n: source.pending,
+        }),
       ));
     });
 
     const entries = await request('/api/usage');
     if (!entries.length) usage.append(emptyState('status.noUsage'));
     entries.forEach(entry => usage.append(listRow(
-      entry.model, `${entry.prompt_tokens} + ${entry.completion_tokens} token`,
+      entry.model, () => t('status.tokens', {input: entry.prompt_tokens, output: entry.completion_tokens}),
     )));
   } catch (error) { showError(connectors, error); }
 };
 
-// ---------------------------------------------------------------- grafo
+// ---------------------------------------------------------------- graph
 
 const renderGraph = async container => {
   container.append(moduleHead('nav.graph', 'graph.intro'));
-  container.append(el('p', {className: 'hint callout', text: t('graph.globalNote')}));
+  container.append(el('p', {className: 'hint callout', text: () => t('graph.globalNote')}));
 
   const form = el('form');
   const input = el('input');
-  input.placeholder = t('graph.search');
-  input.setAttribute('aria-label', t('graph.search'));
-  form.append(input, el('button', {className: 'primary', text: t('graph.submit'), type: 'submit'}));
+  bindLocale(input, () => {
+    input.placeholder = t('graph.search');
+    input.setAttribute('aria-label', t('graph.search'));
+  });
+  form.append(input, el('button', {className: 'primary', text: () => t('graph.submit'), type: 'submit'}));
   const list = el('div');
   const detail = el('div');
   container.append(form, list, detail);
@@ -424,7 +441,7 @@ const renderGraph = async container => {
       const data = await request(`/api/entities?search=${encodeURIComponent(search)}`);
       if (!data.length) { list.replaceChildren(emptyState('graph.none')); return; }
       list.replaceChildren(...data.map(entity => {
-        const row = listRow(entity.name, `${entity.type} · ${entity.mentions} ${t('graph.mentions')}`);
+        const row = listRow(entity.name, () => t('graph.entitySummary', {type: entity.type, n: entity.mentions}));
         const open = el('button', {className: 'ghost', text: entity.name, type: 'button'});
         row.append(open);
         open.addEventListener('click', async () => {
@@ -434,7 +451,7 @@ const renderGraph = async container => {
             const box = detail.firstChild;
             box.append(el('h3', {text: `${full.entity.name} · ${full.entity.type}`}));
             (full.mentions || []).forEach(m => {
-              const mention = listRow(m.source_name, `${m.author} · ${new Date(m.sent_at).toLocaleString(currentLanguage)}`);
+              const mention = listRow(m.source_name, () => `${m.author} · ${formatDate(m.sent_at)}`);
               const url = safeSourceURL(m.url);
               if (url) {
                 const link = el('a', {text: `M${m.id}`});
@@ -455,12 +472,12 @@ const renderGraph = async container => {
   load();
 };
 
-// ---------------------------------------------------------------- impostazioni
+// ---------------------------------------------------------------- settings
 
 const renderSettings = async container => {
   container.append(moduleHead('nav.settings', 'settings.intro'));
 
-  // --- modello linguistico ---
+  // --- language model ---
   const llm = card('section.llm', 'section.llm.intro');
   container.append(llm);
   try {
@@ -474,7 +491,7 @@ const renderSettings = async container => {
       secret: item.secret,
     })));
     const result = el('p', {className: 'hint'});
-    form.append(el('button', {className: 'primary', text: t('settings.save'), type: 'submit'}));
+    form.append(el('button', {className: 'primary', text: () => t('settings.save'), type: 'submit'}));
     llm.append(form, result);
     form.addEventListener('submit', async event => {
       event.preventDefault();
@@ -482,11 +499,10 @@ const renderSettings = async container => {
       form.querySelectorAll('input').forEach(input => {
         if (input.value.trim()) values[input.dataset.key] = input.value.trim();
       });
-      if (!Object.keys(values).length) { result.textContent = t('settings.noChange'); return; }
+      if (!Object.keys(values).length) { setText(result, () => t('settings.noChange')); return; }
       try {
         const saved = await request('/api/config', {method: 'POST', body: JSON.stringify({values})});
-        result.textContent = saved.restart_required
-          ? t('settings.savedRestart') : t('settings.savedLive');
+        setText(result, () => t(saved.restart_required ? 'settings.savedRestart' : 'settings.savedLive'));
         form.querySelectorAll('input').forEach(input => { input.value = ''; });
       } catch (error) { showError(result, error); }
     });
@@ -504,16 +520,18 @@ const renderSettings = async container => {
       return;
     }
     serverList.replaceChildren(...AppState.workspaces.map(workspace => {
-      const row = listRow(workspace.name, [
-        workspace.platform || '—',
-        `${workspace.active_sources} ${t('workspace.activeSources')}`,
-        workspace.digest_webhook ? t('workspace.hasWebhook') : t('workspace.noWebhook'),
-      ].join(' · '));
-      const remove = el('button', {className: 'small danger', text: t('workspace.delete')});
+      const row = listRow(workspace.name, () => `${workspace.platform || '—'} · ${t('workspace.summary', {
+        n: workspace.active_sources,
+        destination: t(workspace.digest_webhook ? 'workspace.hasWebhook' : 'workspace.noWebhook'),
+      })}`);
+      const remove = el('button', {className: 'small danger', text: () => t('workspace.delete')});
       remove.addEventListener('click', async () => {
         if (!confirm(t('workspace.deleteConfirm'))) return;
-        await request(`/api/workspaces/${workspace.id}`, {method: 'DELETE'});
-        Shell.reloadWorkspaces();
+        try {
+          await request(`/api/workspaces/${workspace.id}`, {method: 'DELETE'});
+          await Shell.reloadWorkspaces();
+          renderServers();
+        } catch (error) { showError(addResult, error); }
       });
       row.append(remove);
       return row;
@@ -526,8 +544,8 @@ const renderSettings = async container => {
   const extField = field({id: 'new-ws-external', labelKey: 'workspace.externalId', helpKey: 'workspace.externalIdHelp'});
   const addResult = el('p', {className: 'hint'});
   addForm.append(nameField, extField,
-    el('button', {className: 'primary', text: t('workspace.create'), type: 'submit'}));
-  servers.append(el('h3', {text: t('workspace.create')}), addForm, addResult);
+    el('button', {className: 'primary', text: () => t('workspace.create'), type: 'submit'}));
+  servers.append(el('h3', {text: () => t('workspace.create')}), addForm, addResult);
   addForm.addEventListener('submit', async event => {
     event.preventDefault();
     try {
@@ -540,26 +558,28 @@ const renderSettings = async container => {
         }),
       });
       addForm.querySelectorAll('input').forEach(input => { input.value = ''; });
-      addResult.textContent = '';
-      Shell.reloadWorkspaces();
+      setText(addResult, () => t('settings.savedLive'));
+      await Shell.reloadWorkspaces();
+      renderServers();
     } catch (error) { showError(addResult, error); }
   });
 
-  // --- conservazione ---
+  // --- retention ---
   const retention = card('retention.title');
   container.append(retention);
   const retentionForm = el('form');
   const days = el('input');
   days.type = 'number';
   days.min = '1';
-  days.placeholder = t('retention.placeholder');
-  const daysLabel = el('label', {text: t('retention.label')});
+  bindLocale(days, () => { days.placeholder = t('retention.placeholder'); });
+  const daysLabel = el('label', {text: () => t('retention.label')});
   daysLabel.append(days);
   const retentionResult = el('p', {className: 'hint'});
   retentionForm.append(daysLabel,
-    el('button', {className: 'primary', text: t('retention.save'), type: 'submit'}));
+    el('button', {className: 'primary', text: () => t('retention.save'), type: 'submit'}));
   retention.append(retentionForm, retentionResult);
-  request('/api/settings/retention').then(data => { days.value = data.days ?? ''; }).catch(() => {});
+  request('/api/settings/retention').then(data => { days.value = data.days ?? ''; })
+    .catch(error => showError(retentionResult, error));
   retentionForm.addEventListener('submit', async event => {
     event.preventDefault();
     try {
@@ -567,11 +587,11 @@ const renderSettings = async container => {
         method: 'POST',
         body: JSON.stringify({days: days.value.trim() ? Number(days.value) : null}),
       });
-      retentionResult.textContent = t('retention.saved');
+      setText(retentionResult, () => t('retention.saved'));
     } catch (error) { showError(retentionResult, error); }
   });
 
-  // --- autori ignorati ---
+  // --- ignored authors ---
   const ignored = card('ignored.title', 'ignored.intro');
   container.append(ignored);
   const ignoredList = el('div');
@@ -582,10 +602,12 @@ const renderSettings = async container => {
       if (!data.length) { ignoredList.replaceChildren(emptyState('ignored.none')); return; }
       ignoredList.replaceChildren(...data.map(entry => {
         const row = listRow(`${entry.platform} · ${entry.author_id}`);
-        const remove = el('button', {className: 'small ghost', text: t('ignored.remove')});
+        const remove = el('button', {className: 'small ghost', text: () => t('ignored.remove')});
         remove.addEventListener('click', async () => {
-          await request(`/api/ignored-authors/${entry.platform}/${entry.author_id}`, {method: 'DELETE'});
-          loadIgnored();
+          try {
+            await request(`/api/ignored-authors/${entry.platform}/${entry.author_id}`, {method: 'DELETE'});
+            loadIgnored();
+          } catch (error) { showError(ignoredList, error); }
         });
         row.append(remove);
         return row;
@@ -595,15 +617,15 @@ const renderSettings = async container => {
   const ignoreForm = el('form');
   const ignorePlatform = el('select');
   PLATFORMS.forEach(name => {
-    const option = el('option', {text: t(`section.${name}`)});
+    const option = el('option', {text: () => t(`section.${name}`)});
     option.value = name;
     ignorePlatform.append(option);
   });
-  const platformLabel = el('label', {text: t('ignored.platform')});
+  const platformLabel = el('label', {text: () => t('ignored.platform')});
   platformLabel.append(ignorePlatform);
   const authorField = field({id: 'ignore-author', labelKey: 'ignored.author'});
   ignoreForm.append(platformLabel, authorField,
-    el('button', {text: t('ignored.add'), type: 'submit'}));
+    el('button', {text: () => t('ignored.add'), type: 'submit'}));
   ignored.append(ignoreForm);
   ignoreForm.addEventListener('submit', async event => {
     event.preventDefault();
@@ -621,9 +643,9 @@ const renderSettings = async container => {
   });
   loadIgnored();
 
-  // --- cancellazione ---
+  // --- erasure ---
   const wipe = card('wipe.title', 'wipe.note');
-  const wipeButton = el('button', {className: 'danger', text: t('wipe.button')});
+  const wipeButton = el('button', {className: 'danger', text: () => t('wipe.button')});
   const wipeResult = el('p', {className: 'hint'});
   wipe.append(wipeButton, wipeResult);
   container.append(wipe);
@@ -631,12 +653,12 @@ const renderSettings = async container => {
     if (!confirm(t('wipe.confirm'))) return;
     try {
       await request('/api/wipe', {method: 'POST', body: JSON.stringify({confirm: 'WIPE'})});
-      wipeResult.textContent = t('wipe.done');
+      setText(wipeResult, () => t('wipe.done'));
     } catch (error) { showError(wipeResult, error); }
   });
 };
 
-// ---------------------------------------------------------------- registro
+// ---------------------------------------------------------------- registry
 
 const GNOSIS_MODULES = [
   {id: 'overview', group: 'bot', icon: '◎', labelKey: 'nav.overview', render: renderOverview},

@@ -20,6 +20,7 @@ from . import envfile
 from .config import Settings, SourceConfig, load_sources, save_sources
 from .db import Database
 from .digest import DigestService, previous_week
+from .i18n import normalize_locale
 from .llm import LLM, LLMNotConfigured
 from .notify import push_digest
 from .rag import RAG
@@ -27,9 +28,7 @@ from .rag import RAG
 security = HTTPBasic(auto_error=False)
 
 _ENV_PATH = Path(".env")
-# Ogni chiave dichiara la sezione a cui appartiene: la dashboard le raggruppa invece di
-# presentare un unico elenco piatto. I ruoli Discord e le destinazioni del digest non sono
-# qui perche' sono impostazioni di workspace, non globali.
+# Group dashboard keys by section; roles and digest destinations belong to workspaces.
 _CONFIG_FIELDS = (
     ("GNOSIS_CHAT_API_KEY", "llm"),
     ("GNOSIS_CHAT_BASE_URL", "llm"),
@@ -48,8 +47,7 @@ _CONFIG_FIELDS = (
 _CONFIG_KEYS = tuple(key for key, _ in _CONFIG_FIELDS)
 _CONFIG_SECTIONS = dict(_CONFIG_FIELDS)
 _SECRET_HINTS = ("KEY", "TOKEN", "SECRET", "HASH", "WEBHOOK")
-# Chiavi applicabili a caldo: riguardano solo il client di chat di questo processo. Le altre
-# toccano l'embedder o i connettori del worker, che vive in un container separato.
+# Only chat keys apply live; the embedder and collectors run in a separate worker.
 _LIVE_KEYS = frozenset(
     {
         "GNOSIS_CHAT_API_KEY",
@@ -61,8 +59,7 @@ _LIVE_KEYS = frozenset(
 )
 
 
-# I tre bot Prime Build. La dashboard e' la stessa per tutti: cambia solo quale e' quello
-# corrente e quali degli altri risultano raggiungibili.
+# All Prime Build dashboards share this catalog, current-bot flag and reachability status.
 _BOT_CATALOG = {
     "gnosis": {
         "name": "Gnosis",
@@ -96,8 +93,7 @@ _bot_probe_cache: dict[str, tuple[float, bool]] = {}
 
 
 def _bot_reachable(url: str) -> bool:
-    """Una richiesta breve all'indirizzo dichiarato. Qualsiasi risposta HTTP basta: serve
-    sapere se c'e' qualcosa in ascolto, non interrogarne l'API."""
+    """Probe the configured address; any HTTP response proves that a service is listening."""
     cached = _bot_probe_cache.get(url)
     now = time.monotonic()
     if cached and now - cached[0] < _BOT_PROBE_TTL:
@@ -106,7 +102,7 @@ def _bot_reachable(url: str) -> bool:
         with httpx.Client(timeout=2.0, follow_redirects=True) as client:
             client.get(url)
         alive = True
-    except Exception:  # noqa: BLE001 - qualsiasi errore di rete significa non raggiungibile
+    except Exception:  # noqa: BLE001 - any network error means unreachable
         alive = False
     _bot_probe_cache[url] = (now, alive)
     return alive
@@ -119,12 +115,18 @@ def _is_secret(key: str) -> bool:
 class Query(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     workspace_id: int | None = Field(default=None, gt=0)
+    locale: str = Field(default="en", max_length=35)
+
+    @field_validator("locale")
+    @classmethod
+    def supported_locale(cls, value: str) -> str:
+        return normalize_locale(value)
 
     @field_validator("question")
     @classmethod
     def nonblank_question(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("Domanda vuota")
+            raise ValueError("Empty question")
         return value.strip()
 
 
@@ -135,7 +137,7 @@ class ConfigUpdate(BaseModel):
     @classmethod
     def validate_settings(cls, values: dict[str, str]) -> dict[str, str]:
         if values.get("GNOSIS_EMBEDDING_PROVIDER", "local") not in {"local", "openai"}:
-            raise ValueError("Provider embedding non valido")
+            raise ValueError("Invalid embedding provider")
         for key in ("TELEGRAM_API_ID", "GNOSIS_TELEGRAM_ALLOWED_USERS"):
             raw = values.get(key, "")
             if raw and any(
@@ -144,9 +146,9 @@ class ConfigUpdate(BaseModel):
                 or int(value.strip()) <= 0
                 for value in raw.split(",")
             ):
-                raise ValueError(f"{key}: ID numerici positivi richiesti")
+                raise ValueError(f"{key}: positive numeric IDs required")
             if key == "TELEGRAM_API_ID" and "," in raw:
-                raise ValueError("TELEGRAM_API_ID: un solo ID richiesto")
+                raise ValueError("TELEGRAM_API_ID: exactly one ID required")
         return values
 
 
@@ -171,14 +173,14 @@ class WorkspaceInput(BaseModel):
     @classmethod
     def workspace_name(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("Nome workspace vuoto")
+            raise ValueError("Empty workspace name")
         return value.strip()
 
     @field_validator("external_id")
     @classmethod
     def numeric_server_id(cls, value: str | None) -> str | None:
         if value is not None and (not value.isascii() or not value.isdigit() or int(value) <= 0):
-            raise ValueError("ID server non valido")
+            raise ValueError("Invalid server ID")
         return value
 
     @field_validator("allowed_role_ids")
@@ -187,7 +189,7 @@ class WorkspaceInput(BaseModel):
         if values is not None and any(
             not value.isascii() or not value.isdigit() or int(value) <= 0 for value in values
         ):
-            raise ValueError("ID ruolo non valido")
+            raise ValueError("Invalid role ID")
         return values
 
 
@@ -207,7 +209,7 @@ class IgnoreAuthorInput(BaseModel):
 def create_app() -> FastAPI:
     settings = Settings.from_env()
     if not settings.username or not settings.password or settings.password == "change-me":
-        raise RuntimeError("Imposta GNOSIS_USERNAME e una GNOSIS_PASSWORD personale")
+        raise RuntimeError("Set GNOSIS_USERNAME and a unique GNOSIS_PASSWORD")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -240,7 +242,7 @@ def create_app() -> FastAPI:
         if not valid:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenziali non valide",
+                detail="Invalid credentials",
                 headers={"WWW-Authenticate": "Basic"},
             )
         return credentials.username
@@ -263,7 +265,7 @@ def create_app() -> FastAPI:
                     "cross-site",
                     "same-site",
                 }:
-                    return JSONResponse(status_code=403, content={"detail": "Origine non valida"})
+                    return JSONResponse(status_code=403, content={"detail": "Invalid origin"})
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -273,7 +275,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(UniqueViolation)
     async def duplicate_workspace(request: Request, error: UniqueViolation) -> JSONResponse:
-        return JSONResponse(status_code=409, content={"detail": "ID server gia' assegnato"})
+        return JSONResponse(status_code=409, content={"detail": "Server ID already assigned"})
 
     def public_workspaces(db):
         return [
@@ -285,7 +287,7 @@ def create_app() -> FastAPI:
         if workspace_id is not None and not any(
             row["id"] == workspace_id for row in db.list_workspaces()
         ):
-            raise HTTPException(status_code=404, detail="Workspace non trovato")
+            raise HTTPException(status_code=404, detail="Workspace not found")
 
     static_dir = Path(__file__).with_name("static")
 
@@ -303,12 +305,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/bots", dependencies=[Depends(authenticate)])
     def bots():
-        """I bot Prime Build affiancati: quello corrente, e gli altri con il loro stato.
-
-        Il probe lo fa il backend e non il browser: da JavaScript una richiesta verso un
-        altro host sarebbe bloccata dal CORS e non si potrebbe distinguere "spento" da
-        "raggiungibile ma di un'altra origine".
-        """
+        """List Prime Build bots, probing server-side to avoid browser CORS ambiguity."""
         configured = dict(settings.bots)
         result = []
         for identifier, entry in _BOT_CATALOG.items():
@@ -351,8 +348,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/available-sources", dependencies=[Depends(authenticate)])
     def available_sources(request: Request, platform: str = ""):
-        """Canali e chat che il bot vede davvero, per la tendina del tab Sorgenti.
-        Li scopre il worker: qui si legge solo la cache che ha scritto."""
+        """Read the worker's cached channels and chats for the Sources dropdown."""
         return request.app.state.db.list_available_sources(platform)
 
     @app.get("/api/sources", dependencies=[Depends(authenticate)])
@@ -362,7 +358,9 @@ def create_app() -> FastAPI:
     @app.post("/api/chat", dependencies=[Depends(authenticate)])
     async def chat(query: Query, request: Request):
         require_workspace(request.app.state.db, query.workspace_id)
-        return await request.app.state.rag.ask(query.question, workspace_id=query.workspace_id)
+        return await request.app.state.rag.ask(
+            query.question, workspace_id=query.workspace_id, locale=query.locale
+        )
 
     @app.post("/api/search", dependencies=[Depends(authenticate)])
     async def search(query: Query, request: Request):
@@ -384,7 +382,13 @@ def create_app() -> FastAPI:
 
     @app.get("/api/digests", dependencies=[Depends(authenticate)])
     def digests(request: Request, workspace_id: int | None = None):
-        return request.app.state.db.list_digests(workspace_id=workspace_id)
+        return [
+            {
+                **row,
+                "period_date": row["period_start"].astimezone(settings.zoneinfo).date().isoformat(),
+            }
+            for row in request.app.state.db.list_digests(workspace_id=workspace_id)
+        ]
 
     @app.post("/api/digests/run", dependencies=[Depends(authenticate)])
     async def run_digest(request: Request, workspace_id: int | None = None):
@@ -405,8 +409,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/setup", dependencies=[Depends(authenticate)])
     def setup_state(request: Request):
-        """Cosa e' pronto e cosa manca. Restituisce solo dati: le spiegazioni vivono nel
-        dizionario i18n del frontend, cosi' le traduzioni stanno in un posto solo."""
+        """Return readiness data; explanations belong to the frontend locale dictionary."""
         active: dict[str, int] = {}
         for row in request.app.state.db.list_sources():
             if row["enabled"]:
@@ -463,7 +466,7 @@ def create_app() -> FastAPI:
         unknown = set(update.values) - set(_CONFIG_KEYS)
         if unknown:
             raise HTTPException(
-                status_code=400, detail=f"Chiavi non consentite: {', '.join(sorted(unknown))}"
+                status_code=400, detail=f"Unsupported keys: {', '.join(sorted(unknown))}"
             )
         try:
             envfile.write_env(_ENV_PATH, update.values)
@@ -480,7 +483,7 @@ def create_app() -> FastAPI:
     @app.post("/api/sources", dependencies=[Depends(authenticate)])
     def upsert_source(source: SourceInput, request: Request):
         if source.platform not in {"telegram", "discord", "reddit"}:
-            raise HTTPException(status_code=400, detail="Piattaforma non valida")
+            raise HTTPException(status_code=400, detail="Invalid platform")
         existing = load_sources(settings.sources_file)
         updated = [
             item
@@ -522,7 +525,7 @@ def create_app() -> FastAPI:
     def wipe(confirm: WipeConfirm, request: Request):
         if confirm.confirm != "WIPE":
             raise HTTPException(
-                status_code=400, detail='Conferma richiesta: invia {"confirm": "WIPE"}'
+                status_code=400, detail='Confirmation required: send {"confirm": "WIPE"}'
             )
         request.app.state.db.wipe_all()
         return {"wiped": True}
@@ -554,7 +557,7 @@ def create_app() -> FastAPI:
     def entity_detail(entity_id: int, request: Request):
         detail = request.app.state.db.entity_detail(entity_id)
         if detail is None:
-            raise HTTPException(status_code=404, detail="Entità non trovata")
+            raise HTTPException(status_code=404, detail="Entity not found")
         return detail
 
     app.mount("/", StaticFiles(directory=static_dir), name="web")

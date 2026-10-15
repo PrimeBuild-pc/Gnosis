@@ -14,10 +14,10 @@ UsageCallback = Callable[[str, str, int, int], None]
 
 
 class LLMNotConfigured(RuntimeError):
-    """Credenziale mancante, sollevata all'uso e non alla costruzione.
+    """Missing credential, raised on use rather than construction.
 
-    Costruire LLM non deve fallire: il web deve restare raggiungibile anche senza chiave,
-    perché la dashboard e' proprio il posto dove la chiave si inserisce.
+    Constructing LLM must not fail: the web must remain accessible without a key,
+    because the dashboard is where the key is entered.
     """
 
 
@@ -40,7 +40,7 @@ class LLM:
             )
 
     def configure_chat(self, settings: Settings) -> None:
-        """Applica chiave, endpoint e modello di chat senza ricostruire l'embedder locale."""
+        """Apply the chat key, endpoint, and model without rebuilding the local embedder."""
         self.chat_model = settings.chat_model
         self.chat_client = (
             AsyncOpenAI(api_key=settings.chat_api_key, base_url=settings.chat_base_url)
@@ -51,16 +51,16 @@ class LLM:
     def _chat(self) -> AsyncOpenAI:
         if self.chat_client is None:
             raise LLMNotConfigured(
-                "Chiave API chat non configurata: impostare GNOSIS_CHAT_API_KEY (o "
-                "OPENAI_API_KEY) dal tab Impostazioni."
+                "Chat API key not configured: set GNOSIS_CHAT_API_KEY (or "
+                "OPENAI_API_KEY) in the Settings tab."
             )
         return self.chat_client
 
     def _check_dimensions(self, vectors: list[list[float]]) -> list[list[float]]:
         if any(len(vector) != self.embedding_dimensions for vector in vectors):
             raise ValueError(
-                f"Il modello embedding deve produrre vettori da {self.embedding_dimensions} "
-                "dimensioni"
+                f"The embedding model must produce vectors with {self.embedding_dimensions} "
+                "dimensions"
             )
         return vectors
 
@@ -75,7 +75,7 @@ class LLM:
             return self._check_dimensions(vectors)
         if self.embedding_client is None:
             raise LLMNotConfigured(
-                "OPENAI_API_KEY non configurata, obbligatoria con GNOSIS_EMBEDDING_PROVIDER=openai."
+                "OPENAI_API_KEY is not configured; required with GNOSIS_EMBEDDING_PROVIDER=openai."
             )
         response = await self.embedding_client.embeddings.create(
             model=self.embedding_model, input=texts
@@ -84,7 +84,7 @@ class LLM:
         return self._check_dimensions(vectors)
 
     async def embed_query(self, text: str) -> list[float]:
-        """Come embed(), ma usa il prefisso 'query:' dei modelli e5 per un retrieval corretto."""
+        """Like embed(), but use the e5 models' 'query:' prefix for correct retrieval."""
         if self._local_embedder is not None:
             embedder = self._local_embedder
             vectors = await asyncio.to_thread(

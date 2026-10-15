@@ -9,6 +9,7 @@ import discord
 
 from ..config import Settings, SourceConfig
 from ..db import Database
+from ..i18n import message, normalize_locale
 from ..rag import RAG, cited_message_ids
 from ..types import CollectedMessage
 
@@ -18,7 +19,12 @@ Delete = Callable[[str, str, str], None]
 log = logging.getLogger(__name__)
 
 _MAX_REPLY = 2000
-_UNAUTHORIZED = "Non autorizzato: verifica workspace, ID server e ruoli del server."
+
+
+class CommandTranslator(discord.app_commands.Translator):
+    async def translate(self, string, locale, context):
+        key = string.extras.get("key")
+        return message(key, locale.value) if key else None
 
 
 def is_authorized(member_role_ids: Iterable[int], allowed_role_ids: frozenset[int]) -> bool:
@@ -28,7 +34,7 @@ def is_authorized(member_role_ids: Iterable[int], allowed_role_ids: frozenset[in
 
 
 def allowed_roles_for(workspace: dict[str, Any] | None, fallback: frozenset[int]) -> frozenset[int]:
-    """Un workspace esplicito e' obbligatorio; una allowlist vuota revoca l'accesso."""
+    """Require an explicit workspace; an empty allowlist revokes access."""
     if workspace is None:
         return frozenset()
     return frozenset(
@@ -67,7 +73,7 @@ async def run(
     backfill_limit: int = 200,
 ) -> None:
     if not settings.discord_bot_token:
-        raise ValueError("DISCORD_BOT_TOKEN mancante")
+        raise ValueError("Missing DISCORD_BOT_TOKEN")
     allowed = {int(source.external_id) for source in sources}
     allowed_roles = frozenset(settings.discord_allowed_role_ids)
     intents = discord.Intents.default()
@@ -81,6 +87,7 @@ async def run(
             self.tree = discord.app_commands.CommandTree(self)
 
         async def setup_hook(self) -> None:
+            await self.tree.set_translator(CommandTranslator())
             await self.tree.sync()
 
         async def collect(self, message: discord.Message) -> None:
@@ -106,8 +113,7 @@ async def run(
             )
 
         def publish_available(self) -> None:
-            """Pubblica i canali visibili perche' la dashboard possa offrirli in una tendina
-            invece di far copiare a mano ID a 19 cifre."""
+            """Publish visible channels for the dashboard dropdown instead of manual IDs."""
             db.replace_available_sources(
                 "discord",
                 [
@@ -127,7 +133,7 @@ async def run(
                 try:
                     self.publish_available()
                 except Exception:
-                    log.exception("Discord: aggiornamento canali disponibili fallito")
+                    log.exception("Discord: available channel refresh failed")
                 await asyncio.sleep(3600)
 
         async def on_ready(self) -> None:
@@ -159,7 +165,7 @@ async def run(
         return ()
 
     def context_for(interaction: discord.Interaction) -> tuple[frozenset[int], int | None]:
-        """Ruoli autorizzati e workspace del server da cui arriva il comando."""
+        """Resolve allowed roles and workspace for the command's server."""
         workspace = (
             db.workspace_for_external_id("discord", str(interaction.guild_id))
             if interaction.guild_id
@@ -167,49 +173,81 @@ async def run(
         )
         return allowed_roles_for(workspace, allowed_roles), (workspace["id"] if workspace else None)
 
-    @client.tree.command(name="ask", description="Chiedi qualcosa alle fonti raccolte")
-    @discord.app_commands.describe(domanda="La tua domanda")
-    async def ask_command(interaction: discord.Interaction, domanda: str) -> None:
+    @client.tree.command(
+        name="ask",
+        description=discord.app_commands.locale_str(
+            message("ask_description"), key="ask_description"
+        ),
+    )
+    @discord.app_commands.describe(
+        question=discord.app_commands.locale_str(
+            message("question_description"), key="question_description"
+        )
+    )
+    @discord.app_commands.rename(
+        question=discord.app_commands.locale_str("question", key="question_name")
+    )
+    async def ask_command(interaction: discord.Interaction, question: str) -> None:
+        locale = normalize_locale(str(getattr(interaction, "locale", "en")))
         roles, workspace_id = context_for(interaction)
         if workspace_id is None or not is_authorized(member_role_ids(interaction), roles):
-            await interaction.response.send_message(_UNAUTHORIZED, ephemeral=True)
+            await interaction.response.send_message(message("unauthorized", locale), ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
         try:
             result = await rag.ask(
-                domanda,
+                question,
                 workspace_id=workspace_id,
                 discord_guild_id=str(interaction.guild_id),
                 source_external_ids=readable_channels(interaction),
+                locale=locale,
             )
             await interaction.followup.send(_format_answer(result), ephemeral=True)
         except Exception:
-            log.exception("Discord: risposta fallita")
-            await interaction.followup.send(
-                "Risposta non disponibile. Controlla lo stato del worker.", ephemeral=True
-            )
+            log.exception("Discord: answer failed")
+            await interaction.followup.send(message("answer_error", locale), ephemeral=True)
 
-    @client.tree.command(name="digest", description="Ultimo digest settimanale")
+    @client.tree.command(
+        name="digest",
+        description=discord.app_commands.locale_str(
+            message("digest_description"), key="digest_description"
+        ),
+    )
     async def digest_command(interaction: discord.Interaction) -> None:
+        locale = normalize_locale(str(getattr(interaction, "locale", "en")))
         roles, workspace_id = context_for(interaction)
         if workspace_id is None or not is_authorized(member_role_ids(interaction), roles):
-            await interaction.response.send_message(_UNAUTHORIZED, ephemeral=True)
+            await interaction.response.send_message(message("unauthorized", locale), ephemeral=True)
             return
-        digests = db.list_digests(limit=1, workspace_id=workspace_id)
-        if not digests:
-            await interaction.response.send_message("Nessun digest disponibile.", ephemeral=True)
-            return
-        markdown = digests[0]["markdown"]
-        cited = cited_message_ids(markdown)
-        inputs = set(digests[0].get("message_ids", []))
-        accessible = db.accessible_discord_messages(
-            inputs, workspace_id, str(interaction.guild_id), readable_channels(interaction)
+        try:
+            digests = db.list_digests(limit=1, workspace_id=workspace_id)
+            if not digests:
+                text = message("no_digest", locale)
+            else:
+                markdown = digests[0]["markdown"]
+                cited = cited_message_ids(markdown)
+                inputs = set(digests[0].get("message_ids", []))
+                accessible = db.accessible_discord_messages(
+                    inputs, workspace_id, str(interaction.guild_id), readable_channels(interaction)
+                )
+                if not inputs or not cited or not cited <= inputs or inputs != accessible:
+                    text = message("digest_denied", locale)
+                else:
+                    text = markdown[:_MAX_REPLY]
+        except Exception:
+            log.exception("Discord: digest failed")
+            text = message("digest_error", locale)
+        await interaction.response.send_message(text, ephemeral=True)
+
+    @client.tree.command(
+        name="help",
+        description=discord.app_commands.locale_str(
+            message("help_description"), key="help_description"
+        ),
+    )
+    async def help_command(interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            message("help", str(getattr(interaction, "locale", "en"))), ephemeral=True
         )
-        if not inputs or not cited or not cited <= inputs or inputs != accessible:
-            await interaction.response.send_message(
-                "Digest non disponibile per le tue autorizzazioni attuali.", ephemeral=True
-            )
-            return
-        await interaction.response.send_message(markdown[:_MAX_REPLY], ephemeral=True)
 
     await client.start(settings.discord_bot_token)

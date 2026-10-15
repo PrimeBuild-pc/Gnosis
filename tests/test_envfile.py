@@ -42,7 +42,7 @@ def test_mask_empty_value():
 def test_env_injection_is_rejected_without_writing(tmp_path, value):
     path = tmp_path / ".env"
     path.write_text("FOO=old\n", encoding="utf-8")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid keys or multiline values are not allowed"):
         write_env(path, {"FOO": value})
     assert path.read_text(encoding="utf-8") == "FOO=old\n"
 

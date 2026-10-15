@@ -1,19 +1,19 @@
-# Setup delle piattaforme
+# Platform setup
 
-Per installazione, permessi file, rete, costi e procedura Discord completa leggi il
-[README](../README.md#discord-configurazione-passo-per-passo-anche-su-più-server).
-Credenziali e sessioni vanno inserite dall'operatore, mai nei transcript di un agente.
-La raccolta richiede consenso e una allowlist esplicita; scoprire un canale non autorizza a leggerlo.
+For installation, file permissions, networking, costs, and the full Discord procedure, read the
+[README](../README.md#discord-step-by-step-setup-including-multiple-servers).
+Credentials and sessions must be entered by the operator, never in agent transcripts.
+Collection requires consent and an explicit allowlist; discovering a channel does not authorize reading it.
 
 ## Discord
 
-Usa soltanto un bot ufficiale. Developer Portal → Bot → **Message Content Intent**.
-Invita con scope `bot` e `applications.commands`; concedi View Channel, Read Message History
-e Send Messages nei canali necessari, non Administrator. Per ogni server crea un workspace
-con ID server e ruoli; senza mapping o con ruoli vuoti `/ask` e `/digest` negano accesso.
-`GNOSIS_DISCORD_ALLOWED_ROLE_IDS` è deprecato, non è un fallback di autorizzazione.
+Use only an official bot. Developer Portal → Bot → **Message Content Intent**.
+Invite with `bot` and `applications.commands` scopes; grant View Channel, Read Message History,
+and Send Messages in the required channels, not Administrator. For each server, create a workspace
+with the server ID and roles; missing mappings or empty roles make `/ask` and `/digest` deny access.
+`GNOSIS_DISCORD_ALLOWED_ROLE_IDS` is deprecated, not an authorization fallback.
 
-Le fonti devono essere canali testuali assegnati al workspace giusto in `sources.toml` o dashboard:
+Sources must be text channels assigned to the correct workspace in `sources.toml` or the dashboard:
 
 ```toml
 [[discord]]
@@ -23,25 +23,25 @@ workspace = "Server A"
 topics = ["Linux", "backup"]
 ```
 
-Il nome workspace deve coincidere con quello dell'ID server configurato. Per più server,
-ripeti con nomi e ID distinti. Il bot risponde in privato e limita `/ask` ai canali leggibili
-dal membro nel server corrente; thread/forum non fanno parte di questo percorso.
+The workspace name must match the one configured for the server ID. For multiple servers,
+repeat with distinct names and IDs. The bot replies privately and restricts `/ask` to channels
+the member can read in the current server; threads/forums are not part of this path.
 
-### Digest automatici
+### Automatic digests
 
-Crea il webhook da Impostazioni canale → Integrazioni e salvalo nel **workspace**, non in una
-lista di URL globali. Scegli un canale il cui pubblico sia autorizzato a tutte le fonti del
-workspace. Il digest automatico non applica filtri per destinatario e i ruoli dei comandi
-non controllano chi legge il canale webhook. Senza webhook non pubblica. Se ci sono workspace,
-non viene pubblicato un digest globale misto. La dashboard maschera i webhook; campo vuoto
-conserva il valore, API `digest_webhook: ""` lo revoca.
+Create the webhook in Channel Settings → Integrations and save it in the **workspace**, not a
+global URL list. Choose a channel whose audience is authorized for every source in the workspace.
+Automatic digests do not apply per-recipient filters, and command roles do not control who can
+read the webhook channel. Without a webhook, nothing is published. If workspaces exist, no mixed
+global digest is published. The dashboard masks webhooks; an empty field preserves the value,
+while API `digest_webhook: ""` revokes it.
 
 ## Telegram
 
-1. Ottieni `api_id` e `api_hash` su <https://my.telegram.org>.
-2. Imposta `TELEGRAM_API_ID` e `TELEGRAM_API_HASH` in `.env` o dashboard.
-3. Ricrea web/worker per ricaricare le credenziali: `docker compose up -d --force-recreate web worker`.
-4. Ferma il worker e crea la sessione una sola volta:
+1. Obtain `api_id` and `api_hash` at <https://my.telegram.org>.
+2. Set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in `.env` or the dashboard.
+3. Recreate web/worker to reload credentials: `docker compose up -d --force-recreate web worker`.
+4. Stop the worker and create the session once:
 
    ```bash
    docker compose stop worker
@@ -49,38 +49,47 @@ conserva il valore, API `digest_webhook: ""` lo revoca.
    docker compose up -d worker
    ```
 
-5. Scegli soltanto chat accessibili e autorizzate nella pagina Telegram, poi riavvia il worker.
+5. Select only accessible, authorized chats on the Telegram page, then restart the worker.
 
-Sessione in `telegram-data`: proteggerla come una password; la raccolta usa il tuo account,
-non aggira la visibilità dei gruppi. Non leggere o copiare la sessione con un agente senza
-consenso specifico. Il codice può richiedere telefono, codice login e 2FA: li inserisce l'utente.
+The session is in `telegram-data`: protect it like a password; collection uses your account
+and does not bypass group visibility. Do not read or copy the session with an agent without
+specific consent. The code may request a phone number, login code, and 2FA: the user enters them.
 
-### Bot interattivo (`/ask`, `/digest`)
+### Interactive bot (`/ask`, `/digest`)
 
-È uno strumento dell'**operatore globale**, non dei membri dei vari server Discord.
+This is a tool for the **global operator**, not members of the various Discord servers.
 
-1. Crea un bot tramite [@BotFather](https://t.me/BotFather), salva `TELEGRAM_BOT_TOKEN`.
-2. Configura `GNOSIS_TELEGRAM_ALLOWED_USERS` con ID numerici di operatori che possono vedere
-   tutte le fonti. Senza allowlist il bot non parte.
-3. Sono richiesti gli stessi `TELEGRAM_API_ID` e `TELEGRAM_API_HASH`. La sessione bot è separata
-   da quella personale. Ricrea worker dopo aver salvato i valori.
-4. Usa i comandi in conversazione privata. I gruppi sono ignorati anche per utenti autorizzati.
+1. Create a bot with [@BotFather](https://t.me/BotFather) and save `TELEGRAM_BOT_TOKEN`.
+2. Configure `GNOSIS_TELEGRAM_ALLOWED_USERS` with numeric IDs of operators allowed to see all
+   sources. Without an allowlist, the bot does not start.
+3. The same `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` are required. The bot session is separate
+   from the personal session. Recreate worker after saving the values.
+4. Use commands in private conversations. Groups are ignored even for authorized users.
 
-`GNOSIS_DIGEST_TELEGRAM_CHAT_ID` è una destinazione globale soltanto in installazioni senza
-workspace. Configurare push significa inviare contenuti alla chat: approva esplicitamente
-la destinazione e il suo pubblico. Non usare un gruppo ampio come destinazione admin.
+`GNOSIS_DIGEST_TELEGRAM_CHAT_ID` is a global destination only in installations without workspaces.
+Configuring push means sending content to that chat: explicitly approve the destination and its
+audience. Do not use a broad group as an admin destination.
+
+## Interactive languages
+
+Discord and Telegram bot responses support English (`en`), Italian (`it`), Spanish (`es`),
+Russian (`ru`), and Chinese (`zh`). The interaction/user locale selects a supported language,
+with English as fallback; the request locale controls RAG answer generation. The dashboard
+uses browser negotiation and a saved language preference. Operator CLI/installer output is
+English-only. Archived digests are shown in their original generation language, not translated
+on request: existing Italian digests remain, and new scheduled digests are generated in English.
 
 ## Reddit
 
-Crea un'app OAuth approvata per l'uso che intendi fare. Imposta `REDDIT_CLIENT_ID`,
-`REDDIT_CLIENT_SECRET` e `REDDIT_USER_AGENT`, configura subreddit autorizzati, ricrea worker.
-Accesso, quote, prezzi e termini possono cambiare: verifica i requisiti attuali su Reddit;
-nessuna promessa di accesso gratuito o bypass delle limitazioni.
+Create an OAuth app approved for your intended use. Set `REDDIT_CLIENT_ID`,
+`REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT`, configure authorized subreddits, and recreate worker.
+Access, quotas, pricing, and terms may change: check Reddit's current requirements;
+there is no promise of free access or bypassing limits.
 
-## Applicare modifiche
+## Applying changes
 
-- Credenziali in `.env`: `docker compose up -d --force-recreate web worker` (non solo restart).
-- Canali/chat/subreddit nell'allowlist: `docker compose restart worker`.
-- Mapping e ruoli workspace: dal DB al comando successivo, senza restart.
+- Credentials in `.env`: `docker compose up -d --force-recreate web worker` (not just restart).
+- Channels/chats/subreddits in the allowlist: `docker compose restart worker`.
+- Workspace mappings and roles: from the DB on the next command, without restart.
 
-Vedi [operazioni](operations.md) per status, backup e gestione cancellazioni.
+See [operations](operations.md) for status, backups, and deletion handling.

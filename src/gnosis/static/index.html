@@ -8,9 +8,7 @@
 </head>
 <body>
   <a class="skip-link" href="#main" data-i18n="a11y.skip"></a>
-  <!-- Guscio applicativo: barra dei bot e delle sezioni a sinistra, contesto (server) in
-       alto, e un solo contenitore in cui il modulo attivo si disegna. Nessun contenuto
-       specifico di Gnosis vive qui dentro: lo iniettano i moduli. -->
+  <!-- Shared shell: bot navigation on the left, context above and one active module. -->
   <div class="app">
     <div class="brand">
       <span class="brand-mark" id="brand-mark">🧠</span>
@@ -23,7 +21,7 @@
         <select id="workspace-select"></select>
       </div>
       <span class="topbar-spacer"></span>
-      <select id="language-select" aria-label="Language"></select>
+      <select id="language-select" aria-label="Language" data-i18n-aria-label="language.label"></select>
     </div>
 
     <nav class="rail" id="rail"></nav>

@@ -1,8 +1,8 @@
-"""Il comportamento che rende i server separati invece che mescolati.
+"""Behavior that keeps servers separate instead of mixing them.
 
-I filtri SQL veri (search, messages_between) richiedono un Postgres e sono verificati sul
-deploy; qui si copre tutto il resto: round-trip della configurazione, scelta dei ruoli per
-server, e destinazioni del digest per workspace.
+The actual SQL filters (search, messages_between) require Postgres and are checked on
+deployment; this covers everything else: configuration round trips, per-server role
+selection, and per-workspace digest destinations.
 """
 
 import asyncio
@@ -43,7 +43,7 @@ def test_workspace_roles_win_over_global_allowlist():
     roles = allowed_roles_for(workspace, frozenset({99}))
     assert roles == frozenset({7})
     assert is_authorized([7], roles)
-    # Il ruolo globale non basta piu' dentro un server che ha i suoi.
+    # A global role is no longer enough in a server with its own roles.
     assert not is_authorized([99], roles)
 
 
@@ -59,7 +59,7 @@ def test_digest_goes_to_the_workspace_webhook(monkeypatch: pytest.MonkeyPatch):
         calls.append(url)
 
     monkeypatch.setattr("gnosis.notify.send_discord_webhook", fake_send_discord_webhook)
-    settings = Settings(digest_discord_webhook="https://discord.com/api/webhooks/globale")
+    settings = Settings(digest_discord_webhook="https://discord.com/api/webhooks/global")
     asyncio.run(
         push_digest(settings, "hello", discord_webhook="https://discord.com/api/webhooks/server-a")
     )
@@ -67,25 +67,25 @@ def test_digest_goes_to_the_workspace_webhook(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_workspace_without_webhook_does_not_fall_back_to_global(monkeypatch: pytest.MonkeyPatch):
-    """Un workspace senza webhook non deve pubblicare sul webhook di un altro contesto."""
+    """A workspace without a webhook must not publish to another scope's webhook."""
     calls = []
     monkeypatch.setattr("gnosis.notify.send_discord_webhook", lambda url, text: calls.append(url))
-    settings = Settings(digest_discord_webhook="https://discord.com/api/webhooks/globale")
+    settings = Settings(digest_discord_webhook="https://discord.com/api/webhooks/global")
     asyncio.run(push_digest(settings, "hello", discord_webhook=""))
     assert calls == []
 
 
 def test_global_digest_still_uses_env_destination(monkeypatch: pytest.MonkeyPatch):
-    """Senza workspace (None) valgono i valori di .env: le installazioni esistenti non cambiano."""
+    """Without a workspace (None), .env values apply: existing installations do not change."""
     calls = []
 
     async def fake_send_discord_webhook(url, text):
         calls.append(url)
 
     monkeypatch.setattr("gnosis.notify.send_discord_webhook", fake_send_discord_webhook)
-    settings = Settings(digest_discord_webhook="https://discord.com/api/webhooks/globale")
+    settings = Settings(digest_discord_webhook="https://discord.com/api/webhooks/global")
     asyncio.run(push_digest(settings, "hello", discord_webhook=None))
-    assert calls == ["https://discord.com/api/webhooks/globale"]
+    assert calls == ["https://discord.com/api/webhooks/global"]
 
 
 def test_bots_env_parsing():
@@ -95,6 +95,6 @@ def test_bots_env_parsing():
         ("doorman", "http://a:3000"),
         ("dview", "http://b:3001"),
     )
-    # Voci senza indirizzo vengono ignorate invece di produrre un bot con url vuoto.
+    # Entries without an address are ignored instead of producing a bot with an empty URL.
     assert _parse_bots("doorman=,=http://x,") == ()
     assert _parse_bots("") == ()

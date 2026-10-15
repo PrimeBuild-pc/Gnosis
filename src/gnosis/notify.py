@@ -29,11 +29,11 @@ async def push_digest(
     telegram_chat_id: str | None = None,
     discord_webhook: str | None = None,
 ) -> None:
-    """Pubblica il digest sulle destinazioni configurate (facoltative, indipendenti).
+    """Publish the digest to configured destinations (optional and independent).
 
-    Le destinazioni possono arrivare dal workspace: passandole esplicitamente, ogni server
-    riceve il proprio digest sul proprio webhook. Se non arrivano, si ricade sui valori
-    globali di .env, cosi' le installazioni esistenti continuano a funzionare.
+    Destinations may come from the workspace: passing them explicitly gives each server
+    its own digest on its own webhook. Otherwise, fall back to the global .env values
+    so existing installations continue to work.
     """
     chat_id = telegram_chat_id if telegram_chat_id is not None else settings.digest_telegram_chat_id
     webhook = discord_webhook if discord_webhook is not None else settings.digest_discord_webhook

@@ -14,7 +14,7 @@ Emit = Callable[[CollectedMessage], int | None]
 
 async def run(settings: Settings, sources: list[SourceConfig], emit: Emit) -> None:
     if not settings.reddit_client_id or not settings.reddit_client_secret:
-        raise ValueError("Credenziali Reddit mancanti")
+        raise ValueError("Missing Reddit credentials")
     reddit = asyncpraw.Reddit(
         client_id=settings.reddit_client_id,
         client_secret=settings.reddit_client_secret,

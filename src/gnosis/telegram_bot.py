@@ -6,6 +6,7 @@ from telethon import TelegramClient, events
 
 from .config import Settings
 from .db import Database
+from .i18n import message, normalize_locale
 from .rag import RAG
 
 log = logging.getLogger(__name__)
@@ -31,43 +32,54 @@ async def run(settings: Settings, rag: RAG, db: Database) -> None:
     if not settings.telegram_bot_token:
         return
     if not settings.telegram_allowed_user_ids:
-        raise ValueError(
-            "GNOSIS_TELEGRAM_ALLOWED_USERS obbligatorio quando TELEGRAM_BOT_TOKEN è impostato"
-        )
+        raise ValueError("GNOSIS_TELEGRAM_ALLOWED_USERS is required when TELEGRAM_BOT_TOKEN is set")
     allowed = frozenset(settings.telegram_allowed_user_ids)
     client = TelegramClient(
         f"{settings.telegram_session}-bot", settings.telegram_api_id, settings.telegram_api_hash
     )
 
-    @client.on(events.NewMessage(pattern="/start"))
+    async def locale_for(event: events.NewMessage.Event) -> str:
+        try:
+            sender = await event.get_sender()
+            # Telethon exposes Telegram's language_code as lang_code.
+            return normalize_locale(getattr(sender, "lang_code", None))
+        except Exception:
+            log.exception("Telegram: sender language lookup failed")
+            return "en"
+
+    @client.on(events.NewMessage(pattern=r"/(?:start|help)(?:@\w+)?(?:\s|$)"))
     async def on_start(event: events.NewMessage.Event) -> None:
         if event.is_private and is_authorized(event.sender_id, allowed):
-            await event.reply("Ciao! Usa /ask <domanda> oppure /digest.")
+            await event.reply(message("help", await locale_for(event)))
 
-    @client.on(events.NewMessage(pattern=r"/ask(?:\s+(.+))?"))
+    @client.on(events.NewMessage(pattern=r"/ask(?:@\w+)?(?:\s+([\s\S]*))?$"))
     async def on_ask(event: events.NewMessage.Event) -> None:
         if not event.is_private or not is_authorized(event.sender_id, allowed):
             return
+        locale = await locale_for(event)
         question = (event.pattern_match.group(1) or "").strip()
         if not question:
-            await event.reply("Uso: /ask <domanda>")
+            await event.reply(message("ask_usage", locale))
             return
         try:
-            result = await rag.ask(question)
+            result = await rag.ask(question, locale=locale)
             await event.reply(_format_answer(result))
         except Exception:
-            log.exception("Errore durante /ask")
-            await event.reply("Errore durante l'elaborazione della domanda.")
+            log.exception("Telegram: answer failed")
+            await event.reply(message("answer_error", locale))
 
-    @client.on(events.NewMessage(pattern="/digest"))
+    @client.on(events.NewMessage(pattern=r"/digest(?:@\w+)?\s*$"))
     async def on_digest(event: events.NewMessage.Event) -> None:
         if not event.is_private or not is_authorized(event.sender_id, allowed):
             return
-        digests = db.list_digests(limit=1)
-        if not digests:
-            await event.reply("Nessun digest disponibile.")
-            return
-        await event.reply(digests[0]["markdown"][:_MAX_REPLY])
+        locale = await locale_for(event)
+        try:
+            digests = db.list_digests(limit=1)
+            text = digests[0]["markdown"][:_MAX_REPLY] if digests else message("no_digest", locale)
+        except Exception:
+            log.exception("Telegram: digest failed")
+            text = message("digest_error", locale)
+        await event.reply(text)
 
     await client.start(bot_token=settings.telegram_bot_token)
     await client.run_until_disconnected()

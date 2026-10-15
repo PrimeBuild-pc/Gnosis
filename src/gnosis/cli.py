@@ -25,16 +25,14 @@ def _database(settings: Settings) -> Database:
 def main() -> None:
     parser = argparse.ArgumentParser(prog="gnosis")
     subcommands = parser.add_subparsers(dest="command", required=True)
-    subcommands.add_parser("db-init", help="Applica le migration")
-    subcommands.add_parser("web", help="Avvia API e interfaccia")
-    subcommands.add_parser("worker", help="Avvia connettori, pipeline e scheduler")
-    subcommands.add_parser("telegram-login", help="Crea la sessione Telegram")
-    subcommands.add_parser("digest", help="Genera il digest della settimana precedente")
-    subcommands.add_parser(
-        "selfcheck", help="Verifica che le query funzionino sul database configurato"
-    )
-    prune = subcommands.add_parser("prune", help="Elimina messaggi più vecchi della data")
-    prune.add_argument("--before", required=True, help="Data UTC YYYY-MM-DD")
+    subcommands.add_parser("db-init", help="Apply migrations")
+    subcommands.add_parser("web", help="Start the API and interface")
+    subcommands.add_parser("worker", help="Start collectors, pipeline, and scheduler")
+    subcommands.add_parser("telegram-login", help="Create the Telegram session")
+    subcommands.add_parser("digest", help="Generate the previous week's digest")
+    subcommands.add_parser("selfcheck", help="Verify that queries work on the configured database")
+    prune = subcommands.add_parser("prune", help="Delete messages older than the date")
+    prune.add_argument("--before", required=True, help="UTC date YYYY-MM-DD")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -45,11 +43,11 @@ def main() -> None:
     if args.command == "selfcheck":
         results = run_selfcheck(settings)
         for name, ok, detail in results:
-            print(f"{'OK  ' if ok else 'FALLITO'} {name}{f' — {detail}' if detail else ''}")
+            print(f"{'OK  ' if ok else 'FAILED'} {name}{f' — {detail}' if detail else ''}")
         failed = [name for name, ok, _ in results if not ok]
         if failed:
-            raise SystemExit(f"{len(failed)} controlli falliti")
-        print(f"{len(results)} controlli superati")
+            raise SystemExit(f"{len(failed)} checks failed")
+        print(f"{len(results)} checks passed")
     elif args.command == "web":
         uvicorn.run("gnosis.api:create_app", factory=True, host=settings.host, port=settings.port)
     elif args.command == "worker":
@@ -66,10 +64,10 @@ def main() -> None:
                 digest_id = asyncio.run(
                     DigestService(db, llm, settings.zoneinfo).generate(start, end)
                 )
-                print(digest_id or "Nessun messaggio nel periodo")
+                print(digest_id or "No messages in the period")
             elif args.command == "prune":
                 before = datetime.combine(date.fromisoformat(args.before), time(), UTC)
-                print(f"Eliminati {db.prune(before)} messaggi")
+                print(f"Deleted {db.prune(before)} messages")
         finally:
             db.close()
 

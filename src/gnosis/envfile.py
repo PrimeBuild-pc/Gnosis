@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def read_env(path: Path) -> dict[str, str]:
-    """Analizza un file KEY=value (righe vuote e commenti # ignorati)."""
+    """Parse a KEY=value file (ignoring blank lines and # comments)."""
     values: dict[str, str] = {}
     if not path.exists():
         return values
@@ -29,12 +29,12 @@ def _compose_value(value: str) -> str:
 
 
 def write_env(path: Path, updates: dict[str, str]) -> None:
-    """Aggiorna (o aggiunge in coda) le righe KEY=value indicate, preservando il resto del file."""
+    """Update (or append) the specified KEY=value lines, preserving the rest of the file."""
     if any(
         not re.fullmatch(r"[A-Z][A-Z0-9_]*", key) or any(char in value for char in "\r\n\0")
         for key, value in updates.items()
     ):
-        raise ValueError("Chiavi non valide o valori multilinea non consentiti")
+        raise ValueError("Invalid keys or multiline values are not allowed")
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     remaining = dict(updates)
     output: list[str] = []
@@ -53,5 +53,5 @@ def write_env(path: Path, updates: dict[str, str]) -> None:
 
 
 def mask(value: str) -> str:
-    """Mostra solo la presenza del segreto, non lunghezza o suffisso."""
+    """Show only whether a secret is present, not its length or suffix."""
     return "********" if value else ""

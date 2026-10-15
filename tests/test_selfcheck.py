@@ -22,6 +22,7 @@ def test_selfcheck_never_replaces_the_live_allowlist(monkeypatch):
     monkeypatch.setattr(selfcheck, "Database", lambda url: db)
     results = selfcheck.run(Settings())
     assert all(ok for _, ok, _ in results), results
+    assert results[0] == ("migrations", True, "applied")
     db.upsert_sources.assert_not_called()
     sql = [call.args[0] for call in connection.execute.call_args_list]
     assert not any("UPDATE sources" in query or "TRUNCATE" in query for query in sql)

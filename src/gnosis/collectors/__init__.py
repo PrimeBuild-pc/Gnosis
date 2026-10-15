@@ -1,1 +1,1 @@
-"""Connettori alle API ufficiali delle piattaforme."""
+"""Collectors for the platforms' official APIs."""
