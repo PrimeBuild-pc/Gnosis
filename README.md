@@ -1,73 +1,86 @@
 <p align="center">
-  <img src="docs/assets/in-development.svg" alt="In sviluppo" width="420">
+  <img src="docs/assets/in-development.svg" alt="In development" width="420">
 </p>
 
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Gnosis — knowledge base privata per community" width="100%">
+  <img src="docs/assets/banner.svg" alt="Gnosis — private knowledge base for communities" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/PrimeBuild-pc/Gnosis/commits/main"><img alt="Ultimo commit" src="https://img.shields.io/github/last-commit/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=git&amp;logoColor=white"></a>
-  <a href="https://github.com/PrimeBuild-pc/Gnosis/stargazers"><img alt="Stelle GitHub" src="https://img.shields.io/github/stars/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
-  <a href="https://github.com/PrimeBuild-pc/Gnosis/issues"><img alt="Issue aperte" src="https://img.shields.io/github/issues/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=git&amp;logoColor=white"></a>
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
+  <a href="https://github.com/PrimeBuild-pc/Gnosis/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/PrimeBuild-pc/Gnosis?style=plastic&amp;logo=github"></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/PrimeBuild-pc/Gnosis/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/PrimeBuild-pc/Gnosis/ci.yml?branch=main&amp;style=plastic&amp;logo=githubactions&amp;label=CI"></a>
-  <a href="LICENSE"><img alt="Licenza MIT" src="https://img.shields.io/badge/license-MIT-2ea44f?style=plastic"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2ea44f?style=plastic"></a>
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-your%20infrastructure-2dd4a7?style=plastic">
   <img alt="Privacy-first" src="https://img.shields.io/badge/privacy-first-2dd4a7?style=plastic">
 </p>
 
 <p align="center">
-  <img alt="Python 3.11 o successivo" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=plastic&amp;logo=python&amp;logoColor=white">
+  <img alt="Python 3.11 or later" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=plastic&amp;logo=python&amp;logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-API-009688?style=plastic&amp;logo=fastapi&amp;logoColor=white">
   <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=plastic&amp;logo=postgresql&amp;logoColor=white">
   <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=plastic&amp;logo=docker&amp;logoColor=white">
 </p>
 
-<p align="center"><i>Raccogli contenuti autorizzati, cerca nelle fonti e ottieni risposte con citazioni ai messaggi originali.</i></p>
+<p align="center"><i>Collect authorized content, search your sources, and get answers with citations to the original messages.</i></p>
 
 ---
 
 # Gnosis
 
-Knowledge base privata per contenuti autorizzati di Discord, Telegram e Reddit: raccolta,
-ricerca ibrida PostgreSQL/pgvector, risposte con citazioni, digest e dashboard IT/EN.
-Python 3.11+, FastAPI, vanilla JavaScript, Docker Compose. Progetto in sviluppo, licenza MIT.
+A private knowledge base for authorized Discord, Telegram, and Reddit content: collection,
+PostgreSQL/pgvector hybrid search, answers with citations, digests, and a multilingual dashboard.
+Python 3.11+, FastAPI, vanilla JavaScript, Docker Compose. In development, MIT license.
 
-## Prima di iniziare: limiti e costi
+## Before you start: limits and costs
 
-- **Un solo operatore fidato**, con un account admin HTTP Basic. Dashboard e API amministrano
-  l'intera installazione: il selettore workspace è un filtro, **non** un confine di autorizzazione
-  tra utenti web. Non è un SaaS pubblico multi-tenant. Per amministratori che non devono vedere
-  i dati reciproci, usa installazioni, database, credenziali e volumi separati.
-- Lo stesso bot Discord può servire più server. I comandi richiedono un workspace associato
-  esplicitamente all'ID del server e ai suoi ruoli; senza mapping o con ruoli vuoti negano
-  l'accesso. `/ask` usa solo messaggi del server, workspace e canali che il membro può leggere.
-  Le risposte sono private (ephemeral), senza menzioni automatiche. `/digest` verifica tutti
-  i messaggi di input salvati contro i permessi attuali, non soltanto le citazioni; i digest
-  precedenti alla migration 006 non sono mostrati da Discord finché non vengono rigenerati.
-- La dashboard, il grafo e il bot Telegram autorizzato possono consultare **tutte** le fonti.
-  Telegram risponde solo in conversazioni private: autorizza soltanto operatori fidati.
-- Self-hosting non significa offline: Discord/Telegram/Reddit richiedono rete e API. Se usi
-  chat o embedding remoti, i contenuti elaborati vengono inviati al provider. Gli embedding
-  predefiniti sono locali; il build scarica il modello da terzi e richiede rete, spazio e RAM.
-- **ChatGPT/Codex/Claude/Pi e gli abbonamenti coding agent non sono credito OpenAI API.**
-  Per un provider remoto servono credenziali API e la relativa fatturazione. I free tier possono
-  cambiare, avere quote o non offrire il modello scelto. È possibile usare un modello chat
-  locale compatibile OpenAI già disponibile: non serve comprare una chiave OpenAI.
-- Citazioni valide non garantiscono che il modello abbia interpretato correttamente la fonte.
-  Controlla gli originali prima di prendere decisioni. Non raccogliere contenuti senza consenso.
+- **One trusted operator**, with one HTTP Basic admin account. The dashboard and API administer
+  the entire installation: the workspace selector is a filter, **not** an authorization boundary
+  between web users. This is not a public multi-tenant SaaS. For administrators who must not see
+  each other's data, use separate installations, databases, credentials, and volumes.
+- The same Discord bot can serve multiple servers. Commands require a workspace explicitly
+  mapped to the server ID and its roles; missing mappings or empty roles deny access.
+  `/ask` uses only messages from the server, workspace, and channels the member can read.
+  Replies are private (ephemeral), without automatic mentions. `/digest` checks all stored
+  input messages against current permissions, not just citations; digests predating
+  migration 006 are not shown by Discord until regenerated.
+- The dashboard, graph, and authorized Telegram bot can access **all** sources.
+  Telegram replies only in private conversations: authorize trusted operators only.
+- Self-hosting does not mean offline: Discord/Telegram/Reddit require network access and APIs.
+  If you use remote chat or embeddings, processed content is sent to the provider. Default
+  embeddings are local; the build downloads the model from third parties and needs network
+  access, disk space, and RAM.
+- **ChatGPT/Codex/Claude/Pi and coding-agent subscriptions are not OpenAI API credit.**
+  Remote providers need API credentials and separate billing. Free tiers may change, impose
+  quotas, or lack your chosen model. You can use an already available OpenAI-compatible local
+  chat model: buying an OpenAI key is not required.
+- Valid citations do not guarantee the model interpreted the source correctly.
+  Check originals before making decisions. Do not collect content without consent.
 
-## Installazione homelab consigliata (Linux + Docker)
+## Languages
 
-### 1. Prepara la macchina
+The dashboard and interactive Discord/Telegram bots support English (`en`), Italian (`it`),
+Spanish (`es`), Russian (`ru`), and Chinese (`zh`), with **English as the default**. The dashboard
+negotiates the browser language on first use and saves an explicit language choice. The request
+locale controls RAG answer generation; changing the interface language does not translate source
+messages. Bots use the supported language from the interaction/user locale, falling back to English.
 
-Installa Git, [Docker Engine](https://docs.docker.com/engine/install/) e il plugin
-[Docker Compose](https://docs.docker.com/compose/install/) **>= 2.30** (versione moderna consigliata).
-Su Windows/macOS usa Docker Desktop e una shell Linux/WSL per i comandi qui sotto.
-Non è necessario un dominio né aprire porte sul router.
+Archived digests are not dynamically translated: they remain in their original generation language.
+Existing Italian digests are retained unchanged; newly scheduled digests are generated in English.
+Operator-facing CLI commands and the guided installer are English-only.
+
+## Recommended homelab installation (Linux + Docker)
+
+### 1. Prepare the machine
+
+Install Git, [Docker Engine](https://docs.docker.com/engine/install/), and the
+[Docker Compose](https://docs.docker.com/compose/install/) plugin **>= 2.30** (a current version is recommended).
+On Windows/macOS, use Docker Desktop and a Linux/WSL shell for the commands below.
+You do not need a domain or open router ports.
 
 ```bash
 docker version
@@ -76,28 +89,28 @@ git clone https://github.com/PrimeBuild-pc/Gnosis.git
 cd Gnosis
 ```
 
-Prevedi alcuni GB liberi e RAM per PostgreSQL e il modello embedding; i requisiti del modello
-chat locale sono separati. Non viene garantito che un determinato tier cloud sia gratuito o
-sufficiente. L'app usa CPU per gli embedding e non richiede una GPU per il modello predefinito.
+Allow a few GB of free space and RAM for PostgreSQL and the embedding model; local chat-model
+requirements are separate. No particular cloud tier is guaranteed to be free or sufficient.
+The app uses CPU for embeddings and does not require a GPU for the default model.
 
-Il gruppo Docker equivale praticamente a root: aggiungici soltanto utenti fidati. L'installer
-non installa Docker, non cambia gruppi host e non esegue script scaricati dalla rete.
+Docker group membership is effectively root access: add only trusted users. The installer
+does not install Docker, change host groups, or execute scripts downloaded from the network.
 
-### 2. Scegli installazione guidata o manuale
+### 2. Choose guided or manual installation
 
-**Guidata**, dopo aver letto `install.sh`:
+**Guided**, after reading `install.sh`:
 
 ```bash
 ./install.sh
 ```
 
-Chiede credenziali admin e configurazione chat, genera una password database per installazioni
-nuove, crea un'allowlist vuota e compila il checkout locale. Può chiedere `sudo` esclusivamente
-per assegnare il gruppo dei file al container. Non attiva piattaforme né scarica modelli chat.
-Il build scarica dipendenze e il modello embedding. Conserva le credenziali non modificate;
-non usarlo per ruotare automaticamente la password di un database già esistente.
+It asks for admin credentials and chat configuration, generates a database password for new
+installations, creates an empty allowlist, and builds the local checkout. It may request `sudo`
+solely to assign the files' group to the container group. It does not enable platforms or download
+chat models. The build downloads dependencies and the embedding model. Unchanged credentials are
+preserved; do not use it to automatically rotate the password of an existing database.
 
-**Manuale**, passi equivalenti:
+**Manual**, equivalent steps:
 
 ```bash
 umask 077
@@ -105,7 +118,7 @@ cp .env.example .env
 printf '# Add only authorized sources.\n' > config/sources.toml
 ```
 
-Apri `.env` con un editor locale. Imposta:
+Open `.env` in a local editor. Set:
 
 ```dotenv
 POSTGRES_PASSWORD=YOUR_RANDOM_ALPHANUMERIC_DATABASE_PASSWORD
@@ -114,48 +127,48 @@ GNOSIS_USERNAME=admin
 GNOSIS_PASSWORD=YOUR_UNIQUE_LONG_ADMIN_PASSWORD
 ```
 
-Genera le password nel tuo password manager. Ripeti la stessa password database nei due
-campi; usa caratteri alfanumerici per evitare l'URL encoding. **Non condividere né incollare
-il file in una chat con un agente.** `.env` è escluso da Git e usa la sintassi dotenv di
-Compose. Per l'editing manuale preferisci credenziali alfanumeriche; i caratteri speciali
-richiedono quoting ed escaping corretti (`$` letterale diventa `$$` dentro doppi apici).
-Installer e dashboard serializzano automaticamente anche virgolette e backslash.
-Valori multilinea non sono supportati. `change-me` o una password admin vuota impediscono l'avvio.
+Generate passwords in your password manager. Repeat the same database password in both fields;
+use alphanumeric characters to avoid URL encoding. **Do not share or paste the file into an agent
+chat.** `.env` is excluded from Git and uses Compose dotenv syntax. For manual editing, prefer
+alphanumeric credentials; special characters require correct quoting and escaping (a literal `$`
+becomes `$$` inside double quotes). The installer and dashboard automatically serialize quotes
+and backslashes too. Multiline values are not supported. `change-me` or an empty admin password
+prevents startup.
 
-Configura chat in uno dei due modi:
+Configure chat in one of two ways:
 
 ```dotenv
-# API OpenAI (fatturazione separata)
+# OpenAI API (separate billing)
 OPENAI_API_KEY=YOUR_API_KEY
 OPENAI_CHAT_MODEL=gpt-4o-mini
 ```
 
-oppure:
+or:
 
 ```dotenv
-# Endpoint OpenAI-compatible remoto o un tuo server locale già pronto
+# Remote OpenAI-compatible endpoint or your own already configured local server
 GNOSIS_CHAT_API_KEY=local
 GNOSIS_CHAT_BASE_URL=http://YOUR_MODEL_SERVICE:11434/v1
 OPENAI_CHAT_MODEL=YOUR_INSTALLED_MODEL_NAME
 ```
 
-`local` è solo un valore non vuoto per server che non richiedono una chiave: non bypassa
-l'autenticazione di un provider remoto. Dal container, `127.0.0.1` è il container stesso:
-usa il nome di un servizio sulla medesima rete Docker privata. Docker Desktop supporta
-`host.docker.internal`; su Linux il mapping `host-gateway` e la raggiungibilità del server
-modelli vanno configurati esplicitamente. Non esporre un server modelli senza autenticazione
-su Internet per risolvere questo problema. I modelli vanno installati dall'operatore, non
-scaricati automaticamente dall'agente.
+`local` is just a nonempty value for servers that do not require a key: it does not bypass
+remote-provider authentication. Inside a container, `127.0.0.1` is the container itself:
+use a service name on the same private Docker network. Docker Desktop supports
+`host.docker.internal`; on Linux, the `host-gateway` mapping and model-server connectivity
+must be configured explicitly. Do not expose an unauthenticated model server to the Internet
+to solve this problem. Models must be installed by the operator, not automatically downloaded
+by the agent.
 
-Puoi lasciare chat non configurata per aprire la dashboard; il worker attende una chiave non
-vuota e segnalerà errore finché manca. Lascia locali gli embedding (`local`, dimensioni `384`).
-Cambiare provider/modello/dimensioni su dati esistenti richiede una migration e re-indicizzazione:
-`db-init` non riapplica migration già eseguite.
+You can leave chat unconfigured to open the dashboard; the worker waits for a nonempty key
+and will report an error while it is missing. Keep embeddings local (`local`, dimensions `384`).
+Changing provider/model/dimensions with existing data requires a migration and reindexing:
+`db-init` does not reapply migrations that have already run.
 
-### 3. Proteggi i file e avvia
+### 3. Protect files and start
 
-Il container usa UID/GID **10001**, non root. Su un host Linux dedicato, verifica che il gruppo
-10001 non contenga altri utenti host; condividi la scrittura soltanto con questo gruppo:
+The container uses UID/GID **10001**, not root. On a dedicated Linux host, check that group
+10001 contains no other host users; share write access only with this group:
 
 ```bash
 sudo chgrp 10001 .env config config/sources.toml
@@ -167,102 +180,103 @@ docker compose run --rm web gnosis db-init
 docker compose up -d
 ```
 
-Mantieni il proprietario host dei file: questi permessi consentono l'editor dell'operatore e
-la dashboard, senza `chmod 666`/`777`. Su Desktop i bind mount hanno semantiche diverse: verifica
-la scrittura da dashboard e non allargare i permessi a tutti come workaround.
+Keep the host file owner: these permissions allow the operator's editor and dashboard to
+write without `chmod 666`/`777`. Desktop bind mounts have different semantics: verify dashboard
+writes and do not grant everyone access as a workaround.
 
-Il build locale serve a eseguire le modifiche del checkout: `pull` del tag registry `latest`
-potrebbe scaricare una versione precedente. Il modello embedding viene incluso nell'immagine;
-non abbiamo eseguito download/deploy per verificare questa guida.
+The local build runs the checkout's changes: pulling the registry's `latest` tag might
+retrieve an older version. The embedding model is included in the image; we have not performed
+downloads/deployment to verify this guide.
 
-### 4. Apri e verifica
+### 4. Open and verify
 
 ```bash
 docker compose ps
 curl --fail http://127.0.0.1:8080/health
 ```
 
-Apri <http://127.0.0.1:8080>, accedi con le credenziali admin. `/health` è pubblico e indica
-solo che il web risponde, non che Discord/chat siano pronti. La pagina **Stato** mostra worker,
-pipeline e attività delle sorgenti. API, asset e documentazione `/docs` richiedono autenticazione.
+Open <http://127.0.0.1:8080> and sign in with the admin credentials. `/health` is public and only
+indicates that the web service responds, not that Discord/chat are ready. The **Status** page
+shows the worker, pipeline, and source activity. API, assets, and `/docs` documentation require
+authentication.
 
-Se la macchina è remota, dal tuo computer:
+If the machine is remote, run this from your computer:
 
 ```bash
 ssh -N -L 8080:127.0.0.1:8080 USER@HOMELAB_HOST
 ```
 
-Apri lo stesso URL locale. Compose pubblica solo loopback; PostgreSQL non pubblica porte host.
-HTTP Basic non cifra il traffico: per accesso fuori dal tunnel usa HTTPS con proxy e firewall.
-Non pubblicare direttamente 8080. Il proxy deve preservare Host e schema corretti per i
-controlli same-origin; limita gli header forwarded a proxy fidati. Non c'è protezione brute-force
-integrata: non trattare questa dashboard come un servizio pubblico.
+Open the same local URL. Compose publishes only on loopback; PostgreSQL exposes no host ports.
+HTTP Basic does not encrypt traffic: for access outside the tunnel, use HTTPS with a proxy and
+firewall. Do not publish port 8080 directly. The proxy must preserve the correct Host and scheme
+for same-origin checks; accept forwarded headers only from trusted proxies. There is no built-in
+brute-force protection: do not treat this dashboard as a public service.
 
-## Discord: configurazione passo per passo, anche su più server
+## Discord: step-by-step setup, including multiple servers
 
-1. Ottieni il consenso degli amministratori dei server e dei titolari dei contenuti.
-2. Apri <https://discord.com/developers/applications>, **New Application**, poi **Bot**.
-   Copia/resetta il bot token e inseriscilo nel campo `DISCORD_BOT_TOKEN` della pagina Discord
-   della dashboard (o in `.env`). È una credenziale: nessun token utente/self-bot è supportato.
-3. In **Bot → Privileged Gateway Intents**, abilita **Message Content Intent**. Per questa
-   implementazione non sono richiesti Presence o Server Members Intent. Se Discord richiede
-   approvazione dell'intent per il tuo bot, completa quella procedura prima di avviarlo.
-4. In **OAuth2 → URL Generator**, seleziona `bot` e `applications.commands`. Permessi minimi
-   nei canali autorizzati: **View Channels**, **Read Message History**, **Send Messages**
-   per le risposte. Non concedere **Administrator**, gestione server/ruoli o espulsione utenti.
-   Apri il link, scegli il server e approva. Ripeti per ogni server autorizzato.
-5. Dopo aver salvato credenziali ricrea i processi (un semplice `restart` non rilegge `.env`):
+1. Obtain consent from server administrators and content owners.
+2. Open <https://discord.com/developers/applications>, **New Application**, then **Bot**.
+   Copy/reset the bot token and enter it in `DISCORD_BOT_TOKEN` on the dashboard's Discord
+   page (or in `.env`). It is a credential: user tokens/self-bots are not supported.
+3. Under **Bot → Privileged Gateway Intents**, enable **Message Content Intent**. This
+   implementation does not require Presence or Server Members Intent. If Discord requires
+   intent approval for your bot, complete that process before starting it.
+4. In **OAuth2 → URL Generator**, select `bot` and `applications.commands`. Minimum permissions
+   in authorized channels: **View Channels**, **Read Message History**, **Send Messages**
+   for replies. Do not grant **Administrator**, server/role management, or member kicks.
+   Open the link, choose the server, and approve. Repeat for each authorized server.
+5. After saving credentials, recreate the processes (a simple `restart` does not reread `.env`):
 
    ```bash
    docker compose up -d --force-recreate web worker
    ```
 
-6. Attiva Discord **Impostazioni utente → Avanzate → Modalità sviluppatore**. Copia l'ID del
-   **server** e gli ID dei **ruoli** autorizzati (non ID utente o nome ruolo).
-7. Nella dashboard **Impostazioni → Workspace**, crea un workspace dal nome univoco con ID
-   server. Selezionalo in alto; nella pagina **Discord** salva gli ID ruolo separati da virgola.
-   Un workspace senza ruoli nega tutti i comandi. La vecchia variabile globale
-   `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` è deprecata e non concede più accesso.
-8. Nella pagina **Discord → Sorgenti**, scegli soltanto i canali da leggere dalla tendina.
-   Usa esattamente il nome del workspace creato, anche se differisce dal nome del server
-   proposto dalla tendina. I canali scoperti non sono automaticamente autorizzati alla raccolta.
-   Indica argomenti concreti (ad esempio `Linux, backup, homelab`) per il filtro di rilevanza.
-9. Dopo modifiche all'allowlist:
+6. Enable Discord **User Settings → Advanced → Developer Mode**. Copy the **server** ID and
+   authorized **role** IDs (not user IDs or role names).
+7. In dashboard **Settings → Workspaces**, create a uniquely named workspace with the server
+   ID. Select it at the top; on the **Discord** page, save comma-separated role IDs.
+   A workspace without roles denies all commands. The old global variable
+   `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` is deprecated and no longer grants access.
+8. On **Discord → Sources**, select only the channels to read from the dropdown.
+   Use exactly the workspace name you created, even if it differs from the server name
+   suggested by the dropdown. Discovered channels are not automatically authorized for collection.
+   Specify concrete topics (for example `Linux, backup, homelab`) for the relevance filter.
+9. After allowlist changes:
 
    ```bash
    docker compose restart worker
    ```
 
-10. Prova `/ask` con un membro avente il ruolo, poi senza ruolo. Prova nel secondo server:
-    nessuna fonte del primo deve comparire. Un server non mappato nega accesso anche se il bot
-    è invitato. Nei DM Discord i comandi non accedono alla knowledge base.
+10. Test `/ask` with a member who has the role, then without the role. Test in the second server:
+    no source from the first server should appear. An unmapped server denies access even if
+    the bot has been invited. Discord DM commands cannot access the knowledge base.
 
-La sincronizzazione globale dei comandi può impiegare tempo. Il collector legge gli ultimi
-200 messaggi accessibili all'avvio, poi eventi live/modifiche/cancellazioni. Le sorgenti devono
-essere canali testuali: thread/forum non sono inclusi nel flusso di autorizzazione di `/ask`.
-I permessi vengono letti dalla cache Discord aggiornata dagli eventi, non da una richiesta REST
-per ogni comando. Messaggi storici senza `guild_id` verificabile sono esclusi dai comandi.
+Global command synchronization may take time. The collector reads the latest 200 accessible
+messages at startup, then live events/edits/deletions. Sources must be text channels:
+threads/forums are not included in the `/ask` authorization flow. Permissions are read from
+the event-updated Discord cache, not a REST request for each command. Historical messages
+without a verifiable `guild_id` are excluded from commands.
 
-### Digest e canali riservati
+### Digests and restricted channels
 
-Il digest automatico è **per workspace**, non per membro. Un webhook pubblica tutto il digest
-alla sua destinazione: i ruoli `/ask` non proteggono un webhook. Scegli un canale di destinazione
-con un pubblico autorizzato a **tutte** le sorgenti del workspace; altrimenti lascia il webhook
-vuoto. Non mischiare server nei workspace. L'admin può volontariamente configurare sorgenti
-cross-platform: ciò non attribuisce ai membri Discord il diritto di leggerle. I digest di
-workspace Discord includono soltanto messaggi con guild verificabile corrispondente al mapping.
+Automatic digests are **per workspace**, not per member. A webhook publishes the entire digest
+to its destination: `/ask` roles do not protect a webhook. Choose a destination channel whose
+audience is authorized for **all** sources in the workspace; otherwise leave the webhook empty.
+Do not mix servers within workspaces. An admin can deliberately configure cross-platform sources:
+this does not give Discord members permission to read them. Digests for Discord workspaces
+include only messages with a verifiable guild matching the mapping.
 
-Il webhook si crea in **Impostazioni canale → Integrazioni → Webhook**, e si salva nel workspace.
-La dashboard mostra solo un indicatore mascherato; campo vuoto conserva il valore. Per revocarlo,
-il proprietario può inviare `digest_webhook: ""` all'API autenticata o revocarlo in Discord.
-I workspace senza destinazione non usano il webhook globale. Quando esistono workspace, il
-worker non crea né pubblica un digest globale; una generazione globale manuale resta in archivio
-senza push. Configurare una destinazione sbagliata resta una responsabilità dell'operatore.
+Create the webhook in **Channel Settings → Integrations → Webhooks**, and save it in the workspace.
+The dashboard shows only a masked indicator; an empty field preserves the value. To revoke it,
+the owner can send `digest_webhook: ""` to the authenticated API or revoke it in Discord.
+Workspaces without a destination do not use the global webhook. When workspaces exist, the worker
+does not create or publish a global digest; manual global generation stays archived without a push.
+Configuring the wrong destination remains the operator's responsibility.
 
-## Telegram e Reddit (facoltativi)
+## Telegram and Reddit (optional)
 
-Vedi [setup piattaforme](docs/setup-platforms.md). Telegram richiede `TELEGRAM_API_ID`,
-`TELEGRAM_API_HASH`, un login interattivo e la sessione nel volume `telegram-data`:
+See [platform setup](docs/setup-platforms.md). Telegram requires `TELEGRAM_API_ID`,
+`TELEGRAM_API_HASH`, an interactive login, and the session in the `telegram-data` volume:
 
 ```bash
 docker compose stop worker
@@ -270,48 +284,49 @@ docker compose run --rm worker gnosis telegram-login
 docker compose up -d worker
 ```
 
-Il bot Telegram è separato, richiede token BotFather e `GNOSIS_TELEGRAM_ALLOWED_USERS`;
-è solo per operatori autorizzati all'intera base dati e risponde solo in privato.
-Reddit richiede credenziali OAuth e rispetto dei termini/rate limit correnti. Nessuna piattaforma
-è necessaria per aprire la dashboard. `config/sources.example.toml` è solo documentazione:
-non copiarne sorgenti dimostrative in un'installazione reale senza autorizzazione.
+The separate Telegram bot requires a BotFather token and `GNOSIS_TELEGRAM_ALLOWED_USERS`;
+it is only for operators authorized to access the entire database and replies only in private.
+Reddit requires OAuth credentials and compliance with current terms/rate limits. No platform
+is required to open the dashboard. `config/sources.example.toml` is documentation only:
+do not copy demonstration sources into a real installation without authorization.
 
-## Installazione e controllo con un agente AI
+## Installation and control with an AI agent
 
-Puoi chiedere al coding agent di leggere `AGENTS.md` e questa guida e preparare installazione,
-config non sensibile, verifiche o controllo successivo via **CLI esistente**, **API `/docs`**
-autenticata o browser. Non occorre un nuovo MCP, token universale o accesso al Docker socket
-dal container. Le autorizzazioni dell'agent harness/SSH/browser restano necessarie e separate
-sia da Discord sia dal pagamento del provider chat.
+You can ask a coding agent to read `AGENTS.md` and this guide and prepare installation,
+nonsensitive configuration, checks, or later control through the **existing CLI**, authenticated
+**`/docs` API**, or browser. No new MCP, universal token, or Docker socket access from the
+container is needed. Agent harness/SSH/browser permissions remain necessary and separate from
+both Discord permissions and chat-provider billing.
 
-Procedura consigliata:
+Recommended procedure:
 
-1. Definisci host, repository, workspace/server e azioni consentite. L'agente propone i comandi
-   con effetti, costi/download e rollback; ottiene il tuo consenso prima di eseguirli.
-2. Inserisci tu password, token, login/2FA e inviti Discord. Non far stampare `.env`, header
-   Authorization, webhook, sessioni o backup nei log/transcript. Usa una sessione browser già
-   autenticata o un canale credenziali approvato dal tuo harness, non credenziali nel prompt.
-3. Dopo il consenso l'agente può installare/ricreare solo lo stack concordato, controllare
-   `/health`, leggere Stato e provare sorgenti con dati sintetici. Può configurare workspace
-   e allowlist tramite le stesse API della dashboard.
-4. Per il controllo successivo concedi accesso limitato allo stesso host e indica una lista
-   di azioni: ad esempio verifiche, restart, backup, aggiornamento. Ogni allargamento di scope,
-   pubblicazione digest, download di modello, cambio permessi, lettura dati privati o operazione
-   distruttiva (`wipe`, `prune`, restore, eliminazione workspace/volumi) richiede consenso specifico.
+1. Define the host, repository, workspaces/servers, and allowed actions. The agent proposes
+   commands with their effects, costs/downloads, and rollback; it obtains your consent before running them.
+2. Enter passwords, tokens, login/2FA, and Discord invitations yourself. Do not let `.env`,
+   Authorization headers, webhooks, sessions, or backups appear in logs/transcripts. Use an
+   already authenticated browser session or a credentials channel approved by your harness,
+   not credentials in the prompt.
+3. After consent, the agent may install/recreate only the agreed stack, check `/health`, read
+   Status, and test sources with synthetic data. It can configure workspaces and the allowlist
+   through the same APIs as the dashboard.
+4. For later control, grant limited access to the same host and specify an action list:
+   for example checks, restarts, backups, updates. Every scope expansion, digest publication,
+   model download, permission change, private-data read, or destructive operation (`wipe`,
+   `prune`, restore, workspace/volume deletion) requires specific consent.
 
-L'API admin concede privilegi globali: non esistono token agent read-only o per workspace.
-Non darle a un agente non fidato. Puoi revocare sessione/harness/SSH e ruotare la password admin;
-le credenziali piattaforma vanno revocate separatamente. Questa guida abilita un percorso,
-non dichiara che l'agente abbia già installato o controllato il tuo sistema.
+The admin API grants global privileges: there are no read-only or workspace-scoped agent tokens.
+Do not grant it to an untrusted agent. You can revoke the session/harness/SSH access and rotate
+the admin password; platform credentials must be revoked separately. This guide enables a
+workflow; it does not claim the agent has already installed or checked your system.
 
-## Backup, aggiornamenti e troubleshooting
+## Backups, updates, and troubleshooting
 
-Vedi [operazioni](docs/operations.md) per procedure complete di backup, restore e retention.
-Prima di aggiornare salva database, `.env`, `config/sources.toml` e sessioni Telegram in un
-backup protetto. I volumi persistono ai restart; **`docker compose down -v` elimina i dati**.
+See [operations](docs/operations.md) for full backup, restore, and retention procedures.
+Before updating, save the database, `.env`, `config/sources.toml`, and Telegram sessions in a
+protected backup. Volumes persist across restarts; **`docker compose down -v` deletes data**.
 
 ```bash
-# Dopo backup; fermare i writer durante migration/aggiornamento
+# After backup; stop writers during migrations/updates
  docker compose stop worker web
  git pull --ff-only
  docker compose build
@@ -319,27 +334,27 @@ backup protetto. I volumi persistono ai restart; **`docker compose down -v` elim
  docker compose up -d --force-recreate
 ```
 
-**Installazioni esistenti:** aggiungi `POSTGRES_PASSWORD` con la password **attuale** del
-PostgreSQL e mantieni coerente `DATABASE_URL`. La variabile non modifica utenti in un volume già
-inizializzato. Se la password è ancora `gnosis`, ruotala con `\password gnosis` in una sessione
-`docker compose exec db psql -U gnosis`, poi aggiorna entrambi i campi e ricrea web/worker; effettua
-prima un backup. Configura mapping e ruoli workspace: il vecchio fallback globale Discord è rimosso.
+**Existing installations:** add `POSTGRES_PASSWORD` with the **current** PostgreSQL password
+and keep `DATABASE_URL` consistent. The variable does not change users in an already initialized
+volume. If the password is still `gnosis`, rotate it with `\password gnosis` in a
+`docker compose exec db psql -U gnosis` session, then update both fields and recreate web/worker;
+back up first. Configure workspace mappings and roles: the old global Discord fallback is removed.
 
-| Sintomo | Controllo / soluzione |
+| Symptom | Check / solution |
 |---|---|
-| Docker/Compose non disponibile | Installa il plugin >= 2.30, controlla daemon e permessi; non fare chmod sul socket |
-| `permission denied` salvando config | Verifica owner host, GID 10001 e permessi dei tre path sopra; evita 666/777 |
-| Worker in errore senza chiave | Imposta API reale o dummy `local` + endpoint locale, poi ricrea i container |
-| Modello chat non trovato / 429 | Verifica nome modello, endpoint, quote e fatturazione del provider; subscription agent ≠ API |
-| Canali non visibili / messaggi vuoti | Token bot, invito, View Channel/History, Message Content Intent e pagina Stato |
-| `/ask` nega accesso | ID server, workspace, ruoli non vuoti e ruolo del membro; nessun fallback globale |
-| Fonti non raccolte dopo salvataggio | Riavvia worker; la selezione workspace non abilita da sola un canale |
-| Nessun risultato | Messaggi processati, argomenti/filtro, sorgenti abilitate e workspace corretto |
-| Digest non disponibile | Nessun messaggio nella settimana precedente o citazioni oggi non accessibili |
-| Database authentication failed | Password di utente esistente e DATABASE_URL devono coincidere; non eliminare il volume |
-| URL locale modelli irraggiungibile | Loopback del container non è l'host; verifica rete privata/servizio modello |
+| Docker/Compose unavailable | Install the plugin >= 2.30, check the daemon and permissions; do not chmod the socket |
+| `permission denied` saving config | Check the host owner, GID 10001, and permissions of the three paths above; avoid 666/777 |
+| Worker errors without a key | Set a real API key or dummy `local` + local endpoint, then recreate containers |
+| Chat model not found / 429 | Check model name, endpoint, provider quotas and billing; agent subscription ≠ API |
+| Channels not visible / empty messages | Bot token, invitation, View Channel/History, Message Content Intent, and Status page |
+| `/ask` denies access | Server ID, workspace, nonempty roles, and member role; no global fallback |
+| Sources not collected after saving | Restart worker; selecting a workspace alone does not enable a channel |
+| No results | Processed messages, topics/filter, enabled sources, and correct workspace |
+| Digest unavailable | No messages in the previous week or citations not currently accessible |
+| Database authentication failed | Existing user's password and DATABASE_URL must match; do not delete the volume |
+| Local model URL unreachable | Container loopback is not the host; check private networking/model service |
 
-## Sviluppo e verifiche offline
+## Development and offline checks
 
 ```bash
 python -m venv .venv
@@ -353,11 +368,12 @@ bash tests/install-selfcheck.sh
 bash -n install.sh
 ```
 
-Frontend senza dipendenze/build tool. I test mockano DB, provider e Discord: nessuna chiamata
-Discord, download modelli o deploy. Su un database di test autorizzato, `gnosis selfcheck`
-applica migration, crea fixture dal prefisso univoco e le cancella; non cambia l'allowlist reale.
-È una verifica SQL, non un controllo completamente read-only: chiedi permesso prima di eseguirlo.
-Prestazioni su grandi archivi e comportamenti live delle piattaforme vanno verificati nel tuo ambiente.
+The frontend has no dependencies/build tools. Tests mock the DB, providers, and Discord:
+no Discord calls, model downloads, or deployments. On an authorized test database,
+`gnosis selfcheck` applies migrations, creates uniquely prefixed fixtures, and removes them;
+it does not change the real allowlist. This is an SQL check, not a fully read-only check:
+ask permission before running it. Large-archive performance and live-platform behavior must
+be verified in your environment.
 
-Altri riferimenti: [architettura dashboard](docs/dashboard-shell.md),
-[config esempio](.env.example), [licenza](LICENSE).
+Further references: [dashboard architecture](docs/dashboard-shell.md),
+[example configuration](.env.example), [license](LICENSE).

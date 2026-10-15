@@ -1,39 +1,51 @@
-# Architettura della dashboard
+# Dashboard architecture
 
-Gnosis serve una dashboard FastAPI con HTML/CSS/JavaScript vanilla, senza framework
-frontend o build dedicata. `src/gnosis/static/index.html` carica i quattro script in
-ordine; `tests/frontend.cjs` verifica anche che non vengano distribuiti bundle obsoleti.
+Gnosis serves a FastAPI dashboard with vanilla HTML/CSS/JavaScript, without a frontend framework
+or dedicated build. `src/gnosis/static/index.html` loads the four scripts in order;
+`tests/frontend.cjs` also checks that obsolete bundles are not shipped.
 
-| File in `src/gnosis/static/` | Responsabilità |
+| File in `src/gnosis/static/` | Responsibility |
 |---|---|
-| `index.html` | Struttura iniziale, landmark, caricamento CSS e script |
-| `i18n.js` | Stringhe e selezione lingua italiano/inglese |
-| `ui.js` | Helper DOM, campi, messaggi e validazione dei link |
-| `modules.js` | Pagine chat, digest, piattaforme, stato e impostazioni |
-| `shell.js` | Sidebar, routing per hash, workspace e collegamenti agli altri bot |
-| `style.css` | Token di colore, layout, componenti e stati accessibili |
+| `index.html` | Initial structure, landmarks, CSS and script loading |
+| `i18n.js` | Strings and language selection for English, Italian, Spanish, Russian, and Chinese |
+| `ui.js` | DOM helpers, fields, messages, and link validation |
+| `modules.js` | Chat, digests, platforms, status, and settings pages |
+| `shell.js` | Sidebar, hash routing, workspaces, and links to other bots |
+| `style.css` | Color tokens, layout, components, and accessible states |
 
-Il registro `GNOSIS_MODULES` definisce le pagine e i gruppi `bot`, `platforms`,
-`system`. Il DOM viene costruito con `createElement` e `textContent`: contenuti delle
-piattaforme e output del modello sono dati non fidati, non HTML da eseguire.
+The `GNOSIS_MODULES` registry defines pages and the `bot`, `platforms`, and `system` groups.
+The DOM is built with `createElement` and `textContent`: platform content and model output are
+untrusted data, not HTML to execute.
 
-## Contratto backend
+## Backend contract
 
-- `GET /api/bots`: applicazione corrente e bot configurati con `GNOSIS_BOTS`.
-  Il backend verifica la raggiungibilità; il browser apre il collegamento indicato.
-- `GET /api/workspaces`: workspace per il selettore di contesto.
-- `GET /api/setup`: stato della configurazione, con testi di aiuto gestiti da `i18n.js`.
+- `GET /api/bots`: current application and bots configured with `GNOSIS_BOTS`.
+  The backend checks reachability; the browser opens the supplied link.
+- `GET /api/workspaces`: workspaces for the context selector.
+- `GET /api/setup`: configuration status, with help text managed by `i18n.js`.
 
-API, dashboard e asset richiedono l'autenticazione admin; `/health` è pubblico.
-L'amministratore è un operatore fidato globale: il selettore workspace è un filtro,
-non una separazione di privilegi. Anche il grafo resta globale.
+The API, dashboard, and assets require admin authentication; `/health` is public.
+The administrator is a globally trusted operator: the workspace selector is a filter,
+not privilege separation. The graph also remains global.
 
-## Collegamenti a Doorman e D-View
+## Language contract
 
-Le due applicazioni sono Next.js con login Discord OAuth, non moduli di Gnosis.
-`GNOSIS_BOTS` permette di collegare installazioni già esistenti; non condivide sessioni,
-credenziali o permessi. Passare a un altro bot apre una nuova scheda.
+Supported locales are `en`, `it`, `es`, `ru`, and `zh`, with English as default/fallback.
+On first use, the dashboard negotiates the browser language; an explicit selection is saved
+and takes precedence on later visits. Requests carry the selected locale so RAG answers use
+that language, independently of the original source-message language. Interactive Discord and
+Telegram bot replies also use a supported interaction/user locale, with English fallback.
 
-La dashboard mostra istruzioni per installare un bot assente, ma non esegue comandi
-sull'host e non monta il socket Docker. L'installazione e le operazioni autorizzate
-restano descritte nel [README](../README.md) e nella [guida operativa](operations.md).
+Archived digests are not dynamically translated when the locale changes: their original
+generation language is retained, including existing Italian digests. New scheduled digests
+are generated in English. The operator CLI and installer are English-only.
+
+## Links to Doorman and D-View
+
+Both applications use Next.js and Discord OAuth login; they are not Gnosis modules.
+`GNOSIS_BOTS` links already existing installations; it does not share sessions, credentials,
+or permissions. Switching to another bot opens a new tab.
+
+The dashboard displays instructions for installing a missing bot, but does not execute host
+commands or mount the Docker socket. Installation and authorized operations remain documented
+in the [README](../README.md) and [operations guide](operations.md).

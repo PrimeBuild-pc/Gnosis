@@ -27,17 +27,17 @@ async def _supervise(db: Database, name: str, run) -> None:
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            log.exception("Connettore %s terminato; nuovo tentativo tra 30 secondi", name)
+            log.exception("Collector %s stopped; retrying in 30 seconds", name)
             db.report_status(name, "error", str(error)[:500])
             await asyncio.sleep(30)
 
 
 async def run_worker() -> None:
     settings = Settings.from_env()
-    # Il worker, a differenza del web, non ha nulla di utile da fare senza chiave: meglio
-    # fallire subito e visibilmente che a ogni messaggio elaborato.
+    # Unlike the web, the worker cannot do anything useful without a key: fail
+    # immediately and visibly rather than on every processed message.
     if not settings.chat_api_key:
-        raise ValueError("Chiave API chat obbligatoria (OPENAI_API_KEY o GNOSIS_CHAT_API_KEY)")
+        raise ValueError("Chat API key required (OPENAI_API_KEY or GNOSIS_CHAT_API_KEY)")
     configured_sources = load_sources(settings.sources_file)
     sources = [source for source in configured_sources if source.enabled]
     db = Database(settings.database_url)
@@ -63,16 +63,16 @@ async def run_worker() -> None:
             try:
                 count = await pipeline.process_pending()
                 if count:
-                    log.info("Elaborati %s messaggi", count)
+                    log.info("Processed %s messages", count)
             except Exception:
-                log.exception("Errore nella pipeline")
+                log.exception("Pipeline error")
             await asyncio.sleep(settings.process_seconds)
 
     async def digest_loop() -> None:
         while True:
             try:
                 start, end = previous_week(datetime.now(UTC), settings.zoneinfo)
-                # Con workspace configurati, nessun digest misto viene pubblicato.
+                # When workspaces are configured, no mixed digest is published.
                 workspaces = db.list_workspaces()
                 targets: list[dict[str, Any] | None] = workspaces or [None]
                 for workspace in targets:
@@ -83,9 +83,9 @@ async def run_worker() -> None:
                     if not digest_id:
                         continue
                     log.info(
-                        "Creato digest %s per %s",
+                        "Created digest %s for %s",
                         digest_id,
-                        workspace["name"] if workspace else "tutte le fonti",
+                        workspace["name"] if workspace else "all sources",
                     )
                     markdown = db.list_digests(limit=1, workspace_id=workspace_id)[0]["markdown"]
                     await push_digest(
@@ -97,7 +97,7 @@ async def run_worker() -> None:
                         discord_webhook=workspace["digest_webhook"] if workspace else None,
                     )
             except Exception:
-                log.exception("Errore nella generazione del digest")
+                log.exception("Digest generation error")
             await asyncio.sleep(3600)
 
     async def retention_loop() -> None:
@@ -108,11 +108,9 @@ async def run_worker() -> None:
                     cutoff = datetime.now(UTC) - timedelta(days=int(raw))
                     removed = db.prune(cutoff)
                     if removed:
-                        log.info(
-                            "Retention: eliminati %s messaggi più vecchi di %s giorni", removed, raw
-                        )
+                        log.info("Retention: deleted %s messages older than %s days", removed, raw)
             except Exception:
-                log.exception("Errore nella retention")
+                log.exception("Retention error")
             await asyncio.sleep(3600)
 
     grouped = {
@@ -120,9 +118,9 @@ async def run_worker() -> None:
         for platform in ("telegram", "discord", "reddit")
     }
     tasks = [("pipeline", process_loop), ("digest", digest_loop), ("retention", retention_loop)]
-    # I collector partono appena ci sono le credenziali, anche senza sorgenti abilitate:
-    # servono a scoprire i canali disponibili per la tendina della dashboard. Senza questo
-    # non si potrebbe scegliere un canale finche' non se ne e' gia' inserito uno a mano.
+    # Collectors start as soon as credentials are available, even without enabled sources:
+    # they discover available channels for the dashboard dropdown. Otherwise, a channel
+    # could not be selected until one had already been entered manually.
     if settings.telegram_api_id and settings.telegram_api_hash:
         tasks.append(
             ("telegram", lambda: telegram.run(settings, grouped["telegram"], emit, delete, db))

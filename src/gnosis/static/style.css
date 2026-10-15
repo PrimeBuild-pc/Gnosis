@@ -1,6 +1,4 @@
-/* Design system della dashboard Prime Build.
-   Volutamente senza framework: la stessa foglia di stile deve poter essere servita da
-   Gnosis (Python) e dagli altri bot (Next.js) senza portarsi dietro una toolchain. */
+/* Shared Prime Build dashboard styles, without a framework or build toolchain. */
 
 :root {
   color-scheme: dark;
@@ -53,7 +51,7 @@ p, strong { overflow-wrap: anywhere; }
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* ---------- struttura ---------- */
+/* ---------- layout ---------- */
 
 .app {
   display: grid;
@@ -87,8 +85,7 @@ a:hover { text-decoration: underline; }
 }
 .topbar-spacer { flex: 1; }
 
-/* Selettore server: e' il contesto di tutto cio' che si vede sotto, quindi sta in alto
-   e ha piu' peso visivo di un normale campo. */
+/* The context picker sits above the module and carries more weight than ordinary fields. */
 .server-picker {
   display: flex;
   align-items: center;
@@ -144,7 +141,7 @@ a:hover { text-decoration: underline; }
 .rail-icon { width: 1.25rem; text-align: center; }
 .rail-label { flex: 1; }
 
-/* Pastiglia di stato accanto a ogni piattaforma: si vede a colpo d'occhio cosa e' vivo. */
+/* Platform status indicators. */
 .dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--line-strong); flex: 0 0 auto; }
 .dot.on { background: var(--accent); }
 .dot.warn { background: var(--warn); }
@@ -170,7 +167,7 @@ a:hover { text-decoration: underline; }
 .module-head h2 { margin: 0 0 .3rem; font-size: 1.4rem; font-weight: 650; }
 .module-head p { margin: 0; color: var(--text-dim); max-width: 62ch; }
 
-/* ---------- superfici ---------- */
+/* ---------- surfaces ---------- */
 
 .card {
   background: var(--bg-panel);
@@ -199,6 +196,7 @@ a:hover { text-decoration: underline; }
 .hint { color: var(--text-dim); font-size: .87rem; line-height: 1.5; margin: .4rem 0 0; }
 .faint { color: var(--text-faint); }
 .error { color: var(--danger); }
+details pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .empty { color: var(--text-faint); padding: 1rem 0; }
 
 .callout {
@@ -249,7 +247,7 @@ button.small { padding: .3rem .6rem; font-size: .82rem; }
 .row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
 .actions { margin-top: .4rem; }
 
-/* Campo con pulsante informativo: la spiegazione sta accanto all'etichetta, non altrove. */
+/* Contextual help stays next to its field label. */
 .field { display: grid; gap: .3rem; }
 .field-header { display: flex; align-items: center; gap: .5rem; }
 .field-header label { font-size: .9rem; }
@@ -269,7 +267,7 @@ button.info:hover { border-color: var(--accent); color: var(--accent); backgroun
   margin: .1rem 0 .3rem;
 }
 
-/* ---------- checklist di setup ---------- */
+/* ---------- setup checklist ---------- */
 
 .step {
   display: flex;
@@ -286,7 +284,7 @@ button.info:hover { border-color: var(--accent); color: var(--accent); backgroun
 .step-body { flex: 1; }
 .step-body strong { display: block; }
 
-/* ---------- risposte e digest ---------- */
+/* ---------- answers and digests ---------- */
 
 .answer { white-space: pre-wrap; line-height: 1.6; }
 .citation-list { list-style: none; padding: 0; margin: 1rem 0 0; display: grid; gap: .4rem; }
@@ -301,7 +299,7 @@ article { background: var(--bg-panel); border: 1px solid var(--line); border-rad
 article > strong { display: block; margin-bottom: .5rem; }
 article > p { white-space: pre-wrap; margin: 0; line-height: 1.6; }
 
-/* ---------- bot non installati ---------- */
+/* ---------- bot installation ---------- */
 
 .install-card { border-style: dashed; }
 .install-card code {

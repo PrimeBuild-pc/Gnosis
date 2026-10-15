@@ -1,11 +1,11 @@
-"""Controllo di salute che esegue la SQL vera contro il database vero.
+"""Health check that executes real SQL against the real database.
 
-I test dell'API usano un database finto: veloci, ma incapaci di accorgersi che una query
-non e' valida per Postgres. Un bug cosi' e' gia' arrivato in produzione (un coalesce senza
-cast su una colonna text[]), quindi serve un controllo che tocchi davvero il database.
+API tests use a fake database: fast, but unable to detect queries that are invalid in
+Postgres. Such a bug has already reached production (coalesce without a cast on a text[]
+column), so a check that actually accesses the database is needed.
 
-Si usa con `gnosis selfcheck`, anche da un'installazione appena fatta: crea dati con un
-prefisso riconoscibile e li rimuove alla fine, senza toccare quelli reali.
+Run with `gnosis selfcheck`, even on a fresh installation: it creates data with a
+recognizable prefix and removes it afterward, without touching real data.
 """
 
 from __future__ import annotations
@@ -27,17 +27,17 @@ def _cleanup(db: Database, prefix: str) -> None:
 
 
 def run(settings: Settings) -> list[tuple[str, bool, str]]:
-    """Restituisce (nome del controllo, esito, dettaglio). Non solleva: raccoglie."""
+    """Return (check name, outcome, detail). Collect failures rather than raising them."""
     prefix = f"{PREFIX}{uuid4().hex}_"
     results: list[tuple[str, bool, str]] = []
     db = Database(settings.database_url)
     db.open()
     try:
         db.migrate()
-        results.append(("migrazioni", True, "applicate"))
-    except Exception as error:  # noqa: BLE001 - il controllo riporta, non interrompe
+        results.append(("migrations", True, "applied"))
+    except Exception as error:  # noqa: BLE001 - report the failure rather than abort
         db.close()
-        return [("migrazioni", False, str(error))]
+        return [("migrations", False, str(error))]
 
     def check(name: str, action) -> object:
         try:
@@ -49,15 +49,15 @@ def run(settings: Settings) -> list[tuple[str, bool, str]]:
         return value
 
     try:
-        # Il caso che era rotto: campi facoltativi a None su una colonna text[].
+        # The previously broken case: optional fields set to None on a text[] column.
         workspace_id = check(
-            "creazione workspace (campi facoltativi vuoti)",
+            "workspace creation (empty optional fields)",
             lambda: db.upsert_workspace(name=f"{prefix}A", platform="discord"),
         )
         if workspace_id is None:
             return results
         check(
-            "aggiornamento workspace (ruoli e webhook)",
+            "workspace update (roles and webhook)",
             lambda: db.upsert_workspace(
                 name=f"{prefix}A",
                 external_id=prefix,
@@ -65,10 +65,10 @@ def run(settings: Settings) -> list[tuple[str, bool, str]]:
                 digest_webhook="https://example.invalid/webhook",
             ),
         )
-        check("lettura workspace", db.list_workspaces)
+        check("workspace listing", db.list_workspaces)
         check(
-            "ricerca workspace per id esterno",
-            lambda: db.workspace_for_external_id("discord", "assente"),
+            "workspace lookup by external ID",
+            lambda: db.workspace_for_external_id("discord", "missing"),
         )
 
         # upsert_sources replaces the live allowlist: selfcheck must never call it.
@@ -76,7 +76,7 @@ def run(settings: Settings) -> list[tuple[str, bool, str]]:
             source_id = connection.execute(
                 "INSERT INTO sources (platform, external_id, name, workspace_id) "
                 "VALUES ('discord', %s, %s, %s) RETURNING id",
-                (f"{prefix}1", f"{prefix}canale", workspace_id),
+                (f"{prefix}1", f"{prefix}channel", workspace_id),
             ).fetchone()["id"]
         vector = [1.0] + [0.0] * (settings.embedding_dimensions - 1)
         message_id = db.save_message(
@@ -122,13 +122,13 @@ def run(settings: Settings) -> list[tuple[str, bool, str]]:
                 {message_id}, workspace_id, prefix, [f"{prefix}1"]
             ) == {message_id}
 
-        check("isolamento Discord e citazioni digest", assert_scope)
-        check("ricerca senza contesto", lambda: db.search("prova", vector))
-        check("ricerca con contesto", lambda: db.search("prova", vector, workspace_id=workspace_id))
+        check("Discord isolation and digest citations", assert_scope)
+        check("unscoped search", lambda: db.search("test", vector))
+        check("scoped search", lambda: db.search("test", vector, workspace_id=workspace_id))
 
         now = datetime.now(UTC)
         check(
-            "salvataggio digest con provenienza",
+            "digest saving with provenance",
             lambda: db.save_digest(
                 now,
                 now,
@@ -139,16 +139,18 @@ def run(settings: Settings) -> list[tuple[str, bool, str]]:
             ),
         )
         check(
-            "messaggi per il digest, con contesto",
+            "scoped digest messages",
             lambda: db.messages_between(now - timedelta(days=7), now, workspace_id=workspace_id),
         )
-        check("digest gia' presente", lambda: db.digest_exists(now, now, workspace_id=workspace_id))
-        check("statistiche con contesto", lambda: db.stats(workspace_id=workspace_id))
-        check("canali disponibili", lambda: db.list_available_sources("discord"))
-        check("attivita' delle sorgenti", db.source_activity)
+        check(
+            "digest already exists", lambda: db.digest_exists(now, now, workspace_id=workspace_id)
+        )
+        check("scoped statistics", lambda: db.stats(workspace_id=workspace_id))
+        check("available channels", lambda: db.list_available_sources("discord"))
+        check("source activity", db.source_activity)
 
         if workspace_id:
-            check("eliminazione workspace", lambda: db.delete_workspace(workspace_id))
+            check("workspace deletion", lambda: db.delete_workspace(workspace_id))
     finally:
         try:
             _cleanup(db, prefix)

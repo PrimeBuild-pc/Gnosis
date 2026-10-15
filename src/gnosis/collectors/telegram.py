@@ -26,7 +26,7 @@ def _link(chat_id: int, username: str | None, message_id: int) -> str:
 
 async def login(settings: Settings) -> None:
     if not settings.telegram_api_id or not settings.telegram_api_hash:
-        raise ValueError("TELEGRAM_API_ID e TELEGRAM_API_HASH obbligatori")
+        raise ValueError("TELEGRAM_API_ID and TELEGRAM_API_HASH are required")
     client = TelegramClient(
         settings.telegram_session, settings.telegram_api_id, settings.telegram_api_hash
     )
@@ -43,7 +43,7 @@ async def run(
     backfill_limit: int = 200,
 ) -> None:
     if not settings.telegram_api_id or not settings.telegram_api_hash:
-        raise ValueError("Credenziali Telegram mancanti")
+        raise ValueError("Missing Telegram credentials")
     chat_ids = [int(source.external_id) for source in sources]
     allowed = {str(chat_id) for chat_id in chat_ids}
     client = TelegramClient(
@@ -70,8 +70,8 @@ async def run(
             )
         )
 
-    # Con chat_ids vuoto i filtri di Telethon non restringerebbero nulla: meglio non
-    # registrare affatto gli handler, cosi' un avvio di sola scoperta non ascolta tutto.
+    # With empty chat_ids, Telethon filters would not restrict anything: do not register
+    # handlers, so a discovery-only startup does not listen to everything.
     if chat_ids:
 
         @client.on(events.NewMessage(chats=chat_ids))
@@ -89,10 +89,10 @@ async def run(
                     delete("telegram", str(event.chat_id), str(message_id))
 
     async def publish_available() -> None:
-        """Pubblica le chat raggiungibili dall'account per la tendina della dashboard.
+        """Publish chats accessible to the account for the dashboard dropdown.
 
-        Lo fa il worker perche' la sessione Telethon vive nel suo volume: il container web
-        non puo' elencare i dialoghi.
+        The worker does this because the Telethon session lives in its volume:
+        the web container cannot list dialogs.
         """
         rows = []
         async for dialog in client.iter_dialogs():
@@ -106,7 +106,7 @@ async def run(
             try:
                 await publish_available()
             except Exception:
-                log.exception("Telegram: aggiornamento chat disponibili fallito")
+                log.exception("Telegram: failed to refresh available chats")
             await asyncio.sleep(3600)
 
     await client.start()

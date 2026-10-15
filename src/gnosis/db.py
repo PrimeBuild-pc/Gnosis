@@ -43,7 +43,7 @@ class Database:
     def migrate(self, directory: Path = Path("migrations")) -> None:
         files = sorted(directory.glob("*.sql"))
         if not files:
-            raise FileNotFoundError(f"Nessuna migration in {directory}")
+            raise FileNotFoundError(f"No migrations in {directory}")
         with self.connection() as connection:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS schema_migrations "
@@ -96,8 +96,8 @@ class Database:
 
     @staticmethod
     def _workspace_id_by_name(connection: Any, name: str, platform: str) -> int:
-        """Crea il workspace nominato in sources.toml se non esiste ancora: il file resta la
-        fonte di verita' dell'allowlist e non richiede un passaggio dalla dashboard."""
+        """Create the workspace named in sources.toml if missing: the file remains the
+        allowlist's source of truth and does not require a dashboard visit."""
         row = connection.execute(
             """
             INSERT INTO workspaces (name, platform) VALUES (%s, %s)
@@ -130,7 +130,7 @@ class Database:
         digest_webhook: str | None = None,
         digest_telegram_chat_id: str | None = None,
     ) -> int:
-        """I campi lasciati a None non vengono toccati: la dashboard ne salva uno per volta."""
+        """Leave fields set to None untouched: the dashboard saves one at a time."""
         with self.connection() as connection:
             row = connection.execute(
                 """
@@ -175,8 +175,8 @@ class Database:
             ).fetchone()
 
     def replace_available_sources(self, platform: str, rows: list[dict[str, str]]) -> None:
-        """Sostituisce l'elenco dei canali scoperti per una piattaforma. Lo scrive il worker,
-        unico processo con le sessioni Telegram/Discord attive."""
+        """Replace the discovered channels for a platform. Written by the worker,
+        the only process with active Telegram/Discord sessions."""
         with self.connection() as connection:
             connection.execute("DELETE FROM available_sources WHERE platform = %s", (platform,))
             for row in rows:
@@ -327,9 +327,9 @@ class Database:
         discord_guild_id: str | None = None,
         source_external_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Filtra prima del ranking: i migliori risultati devono essere nel contesto."""
+        """Filter before ranking: the best results must be within scope."""
         if discord_guild_id is not None and (workspace_id is None or source_external_ids is None):
-            raise ValueError("Contesto Discord incompleto")
+            raise ValueError("Incomplete Discord scope")
         # Scoped exact ranking avoids ANN candidates from other workspaces starving results.
         materialization = "MATERIALIZED" if workspace_id is not None else "NOT MATERIALIZED"
         with self.connection() as connection:
@@ -397,7 +397,7 @@ class Database:
         guild_id: str,
         channel_ids: list[str],
     ) -> set[int]:
-        """Verifica anche i digest salvati contro appartenenza e permessi attuali."""
+        """Check saved digests against current membership and permissions too."""
         with self.connection() as connection:
             rows = connection.execute(
                 """

@@ -1,9 +1,9 @@
-# Operazioni
+# Operations
 
-Prerequisiti e permessi: [README](../README.md). Tutti i comandi vanno eseguiti nella directory
-Gnosis. API e CLI sono strumenti dell'operatore globale, non di tenant isolati.
+Prerequisites and permissions: [README](../README.md). Run all commands from the Gnosis directory.
+The API and CLI are tools for the global operator, not isolated tenants.
 
-## Stato e reload
+## Status and reload
 
 ```bash
 docker compose ps
@@ -11,32 +11,43 @@ curl --fail http://127.0.0.1:8080/health
 docker compose logs --tail=100 worker web
 ```
 
-`/health` conferma solo che il web risponde. Controlla la pagina Stato per i connettori.
-I log possono contenere dettagli privati/errori dei provider: sanitizzali prima di condividerli.
+`/health` only confirms that the web service responds. Check the Status page for connectors.
+Logs may contain private details/provider errors: sanitize them before sharing.
 
-- Credenziali/endpoint/modello cambiati: `docker compose up -d --force-recreate web worker`.
-  `restart` non ricarica l'env_file Docker. Le chiavi chat salvate dalla dashboard si applicano
-  subito al solo processo web; il worker va comunque ricreato.
-- Allowlist sorgenti cambiata: `docker compose restart worker`. La ricerca esclude subito una
-  sorgente disabilitata, ma il collector mantiene la configurazione fino al restart.
-- Ruoli e mapping workspace: applicati dal DB al comando successivo, senza restart.
+- Credentials/endpoint/model changed: `docker compose up -d --force-recreate web worker`.
+  `restart` does not reload Docker's env_file. Chat keys saved in the dashboard apply immediately
+  to the web process only; the worker must still be recreated.
+- Source allowlist changed: `docker compose restart worker`. Search immediately excludes a
+  disabled source, but the collector keeps its configuration until restart.
+- Workspace roles and mappings: applied from the DB on the next command, without restart.
 
-## Selfcheck (scrive fixture temporanee)
+### Languages and archived content
+
+The dashboard and interactive bots support `en`, `it`, `es`, `ru`, and `zh`, with English as
+fallback. Browser language negotiation and a saved explicit preference select the dashboard
+language; the request locale also controls RAG answers. Source messages are not translated.
+The operator CLI and installer remain English-only.
+
+Archived digests remain in the language used when generated, not the viewer's current language.
+Existing Italian digests are retained unchanged. New scheduled digests are generated in English;
+changing the UI/bot locale does not regenerate or translate the archive.
+
+## Selfcheck (writes temporary fixtures)
 
 ```bash
 docker compose run --rm web gnosis selfcheck
 ```
 
-Solo su un database autorizzato: applica migration e crea fixture univoche, verifica query e
-isolamento Discord, poi rimuove le proprie fixture. Non disabilita le sorgenti esistenti.
-Non è un check read-only; un kill improvviso può lasciare fixture `__selfcheck__` da rimuovere
-manualmente dopo verifica. Non utilizzare per autorizzare automaticamente un deploy.
+Only on an authorized database: it applies migrations and creates unique fixtures, checks
+queries and Discord isolation, then removes its fixtures. It does not disable existing sources.
+It is not read-only; an abrupt kill may leave `__selfcheck__` fixtures to remove manually after
+inspection. Do not use it to automatically authorize a deployment.
 
 ## Backup
 
-Conserva database, `.env`, configurazione e sessioni Telegram insieme. Le sessioni equivalgono
-a credenziali e il dump include messaggi, ruoli e webhook. Usa cifratura e una copia fuori host.
-Su Linux:
+Keep the database, `.env`, configuration, and Telegram sessions together. Sessions are equivalent
+to credentials, and the dump includes messages, roles, and webhooks. Use encryption and an off-host
+copy. On Linux:
 
 ```bash
 umask 077
@@ -50,14 +61,14 @@ docker compose run --rm --no-deps --entrypoint tar worker -C /data -cf - telegra
 docker compose up -d
 ```
 
-Se un comando fallisce, verifica il backup prima di considerarlo valido; riavvia i servizi
-quando sicuro. Il DB continua a funzionare, ma non ci sono writer applicativi durante la copia.
-Cifra il backup con il tuo strumento abituale; non versionare `backups/` né caricarlo su issue.
+If any command fails, verify the backup before treating it as valid; restart services when safe.
+The DB keeps running, but there are no application writers during the copy.
+Encrypt the backup with your usual tool; do not commit `backups/` or upload it to issues.
 
-### Restore (distruttivo: autorizzazione e backup obbligatori)
+### Restore (destructive: authorization and backup required)
 
-Ripristina solo backup fidati, compatibili con la versione del codice. Avvia solo `db`, mantieni
-web/worker fermi. Su una nuova installazione prepara prima `.env`, config e permessi secondo README.
+Restore only trusted backups compatible with the code version. Start only `db`, keeping
+web/worker stopped. For a new installation, first prepare `.env`, config, and permissions per README.
 
 ```bash
 docker compose stop worker web
@@ -72,30 +83,30 @@ chmod 2770 config
 docker compose up -d --force-recreate
 ```
 
-La password PostgreSQL nel volume di destinazione deve corrispondere a quella ripristinata
-in `.env`; ripristinare il file non cambia l'utente PostgreSQL. Non proseguire se il restore
-fallisce. Verifica accesso, Stato e un campione di fonti prima di riattivare i webhook.
+The PostgreSQL password in the destination volume must match the one restored in `.env`;
+restoring the file does not change the PostgreSQL user. Do not proceed if the restore fails.
+Verify access, Status, and a sample of sources before re-enabling webhooks.
 
-## Retention e cancellazione
+## Retention and deletion
 
-Impostazioni → Conservazione dati: giorni massimi dei messaggi (default: nessuna scadenza).
-Il worker elimina messaggi e chunk ogni ora. CLI una tantum:
+Settings → Data retention: maximum message age in days (default: no expiration).
+The worker deletes messages and chunks hourly. One-off CLI:
 
 ```bash
 docker compose run --rm worker gnosis prune --before 2025-01-01
 ```
 
-`prune`/retention non eliminano i digest già salvati. Anche una cancellazione ricevuta dalla
-piattaforma non riscrive i digest storici: possono conservare informazioni derivate. `/digest`
-Discord verifica ancora le citazioni; l'admin resta autorizzato all'archivio globale.
-La funzione **wipe** cancella tutta la memoria raccolta, non è limitata al workspace selezionato.
-Il worker può raccogliere nuovamente messaggi al prossimo backfill: per un'erasure duratura,
-ferma/disabilita le sorgenti e gestisci anche backup/digest. Reddit non garantisce eventi di
-cancellazione retroattiva; applica i termini correnti e gestisci richieste di rimozione.
+`prune`/retention do not delete saved digests. A deletion received from the platform also does
+not rewrite historical digests: they may retain derived information. Discord `/digest` still
+checks citations; the admin remains authorized for the global archive.
+The **wipe** function deletes all collected memory; it is not limited to the selected workspace.
+The worker may collect messages again on the next backfill: for lasting erasure, stop/disable
+sources and handle backups/digests too. Reddit does not guarantee retroactive deletion events;
+follow current terms and handle removal requests.
 
-## Aggiornamento / rollback
+## Update / rollback
 
-Dopo backup e verifica che il checkout non contenga modifiche locali da preservare:
+After backing up and checking that the checkout has no local changes to preserve:
 
 ```bash
 docker compose stop worker web
@@ -105,7 +116,7 @@ docker compose run --rm web gnosis db-init
 docker compose up -d --force-recreate
 ```
 
-Verifica `/health`, Stato e configurazione workspace. I volumi restano: **mai `down -v`** per
-aggiornare. Il rollback di codice può richiedere anche un restore del DB compatibile: le
-migration non hanno downgrade automatico. Non ruotare solo POSTGRES_PASSWORD su un volume
-esistente; vedi README per la procedura PostgreSQL.
+Verify `/health`, Status, and workspace configuration. Volumes remain: **never use `down -v`**
+to update. A code rollback may also require a compatible DB restore: migrations have no automatic
+downgrade. Do not rotate only POSTGRES_PASSWORD on an existing volume; see README for the
+PostgreSQL procedure.

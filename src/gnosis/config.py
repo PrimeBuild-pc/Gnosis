@@ -16,8 +16,8 @@ class SourceConfig:
     name: str
     enabled: bool = True
     topics: tuple[str, ...] = field(default_factory=tuple)
-    # Nome del workspace di appartenenza. Vuoto = nessun workspace: la sorgente resta
-    # interrogabile solo dal contesto globale, che e' il comportamento storico.
+    # Workspace name. Empty = no workspace: the source remains queryable only
+    # from the global context, preserving the original behavior.
     workspace: str = ""
 
 
@@ -53,8 +53,8 @@ class Settings:
     reddit_poll_seconds: int = 900
     process_seconds: int = 10
     relevance_threshold: float = 0.35
-    # Indirizzi degli altri bot Prime Build, per id: {"doorman": "http://127.0.0.1:3000"}.
-    # Servono solo alla dashboard, per sapere quali sono raggiungibili e quali no.
+    # Addresses of other Prime Build bots, by ID: {"doorman": "http://127.0.0.1:3000"}.
+    # Used only by the dashboard to determine which bots are reachable.
     bots: tuple[tuple[str, str], ...] = field(default_factory=tuple)
 
     @classmethod
@@ -116,7 +116,7 @@ class Settings:
 
 
 def _parse_bots(raw: str) -> tuple[tuple[str, str], ...]:
-    """Legge "doorman=http://host:3000,dview=http://host:3001" ignorando le voci malformate."""
+    """Parse "doorman=http://host:3000,dview=http://host:3001", ignoring malformed entries."""
     entries = []
     for chunk in raw.split(","):
         identifier, _, url = chunk.partition("=")
@@ -130,14 +130,14 @@ _ID_FIELDS = {"telegram": "chat_id", "discord": "channel_id", "reddit": "subredd
 
 def load_sources(path: Path) -> list[SourceConfig]:
     if not path.exists():
-        raise FileNotFoundError(f"Configurazione sorgenti assente: {path}")
+        raise FileNotFoundError(f"Source configuration missing: {path}")
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     sources: list[SourceConfig] = []
     for platform, id_field in _ID_FIELDS.items():
         for item in data.get(platform, []):
             external_id = str(item.get(id_field, "")).strip()
             if not external_id:
-                raise ValueError(f"{platform}: campo {id_field} obbligatorio")
+                raise ValueError(f"{platform}: field {id_field} is required")
             sources.append(
                 SourceConfig(
                     platform=platform,

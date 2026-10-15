@@ -75,6 +75,6 @@ def test_workspace_digest_requires_matching_server_metadata():
 
 def test_incomplete_discord_search_never_opens_database():
     db, connection = fake_database([])
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Incomplete Discord scope"):
         db.search("q", [1.0], discord_guild_id="101", source_external_ids=[])
     connection.execute.assert_not_called()

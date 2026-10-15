@@ -1,7 +1,5 @@
-// Guscio della dashboard: barra laterale, selettore del server, routing, cambio lingua.
-// Non contiene nulla di specifico di Gnosis. I moduli arrivano da un registro esterno
-// (GNOSIS_MODULES) e i bot affiancati da /api/bots, cosi' lo stesso guscio puo' essere
-// servito anche da Doorman e D-View cambiando solo il registro.
+// Shared dashboard shell: navigation, context, routing and language selection.
+// Modules come from GNOSIS_MODULES and sibling bots from /api/bots.
 
 const Shell = {
   bots: [],
@@ -36,17 +34,17 @@ const Shell = {
     try {
       this.bots = await request('/api/bots');
     } catch {
-      // Endpoint assente (installazione vecchia): resta solo il bot corrente.
+      // Older installations may not have this endpoint; keep the current bot.
       this.bots = [{id: 'gnosis', name: 'Gnosis', icon: '🧠', installed: true, current: true}];
     }
   },
 };
 
-// ---------------------------------------------------------------- selettore server
+// ---------------------------------------------------------------- server picker
 
 const renderServerPicker = () => {
   const select = document.getElementById('workspace-select');
-  const current = localStorage.getItem('gnosis-workspace') || 'all';
+  const current = AppState.activeWorkspace;
   const options = [{id: 'all', name: t('workspace.all')}, ...AppState.workspaces];
   select.replaceChildren(...options.map(item => {
     const option = el('option', {text: item.name});
@@ -57,12 +55,13 @@ const renderServerPicker = () => {
 };
 
 document.getElementById('workspace-select').addEventListener('change', event => {
-  localStorage.setItem('gnosis-workspace', event.target.value);
+  AppState.activeWorkspace = event.target.value;
+  writePreference('gnosis-workspace', AppState.activeWorkspace);
   renderRail();
   renderModule();
 });
 
-// ---------------------------------------------------------------- lingua
+// ---------------------------------------------------------------- language
 
 const languageSelect = document.getElementById('language-select');
 languageSelect.replaceChildren(...LANGUAGES.map(([code, label]) => {
@@ -74,17 +73,16 @@ languageSelect.replaceChildren(...LANGUAGES.map(([code, label]) => {
 languageSelect.addEventListener('change', event => setLanguage(event.target.value));
 
 document.addEventListener('gnosis:language', () => {
+  languageSelect.value = currentLanguage;
   renderServerPicker();
   renderRail();
-  renderModule();
 });
 
-// ---------------------------------------------------------------- barra laterale
+// ---------------------------------------------------------------- navigation rail
 
 const railItem = ({icon, label, active, current, onClick, dot, locked, badge}) => {
   const item = el('button', {className: 'rail-item', type: 'button'});
-  // "active" e' il modulo aperto, "current" il bot su cui siamo: due cose diverse, due
-  // stili diversi, altrimenti due righe risultano evidenziate insieme.
+  // Active module and current bot use different styles to avoid two active pages.
   if (active) { item.classList.add('active'); item.setAttribute('aria-current', 'page'); }
   if (current) item.classList.add('current');
   if (locked) item.classList.add('locked');
@@ -107,7 +105,7 @@ const renderRail = () => {
   const active = Shell.current();
   rail.replaceChildren();
 
-  // --- bot affiancati ---
+  // --- sibling bots ---
   const bots = railGroup('bots.title');
   Shell.bots.forEach(bot => {
     bots.append(railItem({
@@ -127,7 +125,7 @@ const renderRail = () => {
   });
   rail.append(bots);
 
-  // --- moduli del bot corrente, raggruppati ---
+  // --- current bot modules, grouped ---
   const groups = [
     ['bot', 'rail.group.bot'],
     ['platforms', 'rail.group.platforms'],
@@ -153,11 +151,11 @@ const renderRail = () => {
   });
 };
 
-// ---------------------------------------------------------------- bot da installare
+// ---------------------------------------------------------------- bot installation
 
 const renderInstall = (container, botId) => {
   const bot = Shell.bots.find(item => item.id === botId);
-  if (!bot) { container.append(el('p', {className: 'empty', text: t('bots.unknown')})); return; }
+  if (!bot) { container.append(el('p', {className: 'empty', text: () => t('bots.unknown')})); return; }
 
   container.append(el('div', {className: 'module-head'}));
   const head = container.firstChild;
@@ -165,15 +163,15 @@ const renderInstall = (container, botId) => {
   head.append(el('p', {text: bot.description || ''}));
 
   const box = el('div', {className: 'card install-card'});
-  box.append(el('h3', {text: t('bots.installTitle')}));
-  box.append(el('p', {className: 'hint', text: t('bots.installIntro')}));
+  box.append(el('h3', {text: () => t('bots.installTitle')}));
+  box.append(el('p', {className: 'hint', text: () => t('bots.installIntro')}));
   const command = el('code', {text: bot.install || `git clone ${bot.repo} && cd ${bot.name} && ./install.sh`});
   box.append(command);
-  box.append(el('p', {className: 'hint faint', text: t('bots.installWhy')}));
+  box.append(el('p', {className: 'hint faint', text: () => t('bots.installWhy')}));
 
   const actions = el('div', {className: 'row actions'});
   if (bot.repo) {
-    const link = el('a', {text: t('bots.openRepo')});
+    const link = el('a', {text: () => t('bots.openRepo')});
     link.href = bot.repo;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
@@ -183,13 +181,13 @@ const renderInstall = (container, botId) => {
   container.append(box);
 
   const already = el('div', {className: 'card'});
-  already.append(el('h3', {text: t('bots.alreadyTitle')}));
-  already.append(el('p', {className: 'hint', text: t('bots.alreadyIntro')}));
+  already.append(el('h3', {text: () => t('bots.alreadyTitle')}));
+  already.append(el('p', {className: 'hint', text: () => t('bots.alreadyIntro')}));
   already.append(el('code', {text: 'GNOSIS_BOTS=doorman=http://127.0.0.1:3000,dview=http://127.0.0.1:3001'}));
   container.append(already);
 };
 
-// ---------------------------------------------------------------- modulo attivo
+// ---------------------------------------------------------------- active module
 
 const renderModule = async () => {
   if (location.hash === '#main') return;
@@ -220,7 +218,7 @@ document.querySelector('.skip-link').addEventListener('click', event => {
 
 window.addEventListener('hashchange', () => { renderRail(); renderModule(); });
 
-// ---------------------------------------------------------------- avvio
+// ---------------------------------------------------------------- startup
 
 (async () => {
   document.documentElement.lang = currentLanguage;
