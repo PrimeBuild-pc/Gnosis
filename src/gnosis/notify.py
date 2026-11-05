@@ -23,6 +23,38 @@ async def send_discord_webhook(webhook_url: str, text: str) -> None:
         response.raise_for_status()
 
 
+def split_message(text: str, limit: int = _DISCORD_LIMIT) -> list[str]:
+    """Split on line breaks so each Discord message stays under the limit."""
+    chunks: list[str] = []
+    current = ""
+    for line in text.splitlines(keepends=True):
+        while len(line) > limit:
+            if current:
+                chunks.append(current)
+                current = ""
+            chunks.append(line[:limit])
+            line = line[limit:]
+        if len(current) + len(line) > limit:
+            chunks.append(current)
+            current = ""
+        current += line
+    if current.strip():
+        chunks.append(current)
+    return chunks
+
+
+async def send_discord_channel(bot_token: str, channel_id: str, text: str) -> None:
+    """Post as the bot (no webhook needed); mentions in summaries never ping anyone."""
+    async with httpx.AsyncClient(timeout=15) as client:
+        for chunk in split_message(text):
+            response = await client.post(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages",
+                headers={"Authorization": f"Bot {bot_token}"},
+                json={"content": chunk, "allowed_mentions": {"parse": []}},
+            )
+            response.raise_for_status()
+
+
 async def push_digest(
     settings: Settings,
     markdown: str,

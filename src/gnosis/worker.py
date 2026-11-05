@@ -9,9 +9,9 @@ from . import telegram_bot
 from .collectors import discord, reddit, telegram
 from .config import Settings, load_sources
 from .db import Database
-from .digest import DigestService, previous_week
+from .digest import DigestService, language_name, link_citations, previous_day, previous_week
 from .llm import LLM
-from .notify import push_digest
+from .notify import push_digest, send_discord_channel
 from .pipeline import Pipeline, store_collected
 from .rag import RAG
 from .types import CollectedMessage
@@ -51,6 +51,13 @@ async def run_worker() -> None:
     rag = RAG(db, llm)
 
     def emit(message: CollectedMessage) -> int | None:
+        key = (message.platform, message.source_external_id.lower())
+        if key not in source_ids:
+            # Channels registered at runtime by "read all channels".
+            found = db.source_id(message.platform, message.source_external_id)
+            if found is None:
+                return None
+            source_ids[key] = found
         return store_collected(db, source_ids, message)
 
     def delete(platform: str, source_external_id: str, external_id: str) -> None:
@@ -68,18 +75,43 @@ async def run_worker() -> None:
                 log.exception("Pipeline error")
             await asyncio.sleep(settings.process_seconds)
 
+    async def publish(workspace: dict[str, Any] | None, start, end, markdown: str) -> None:
+        await push_digest(
+            settings,
+            markdown,
+            telegram_chat_id=(workspace["digest_telegram_chat_id"] if workspace else None),
+            discord_webhook=workspace["digest_webhook"] if workspace else None,
+        )
+        channel_id = (workspace or {}).get("digest_channel_id")
+        if channel_id and settings.discord_bot_token:
+            messages = db.messages_between(start, end, workspace_id=workspace["id"])
+            await send_discord_channel(
+                settings.discord_bot_token, channel_id, link_citations(markdown, messages)
+            )
+
     async def digest_loop() -> None:
         while True:
             try:
-                start, end = previous_week(datetime.now(UTC), settings.zoneinfo)
+                now = datetime.now(UTC)
                 # When workspaces are configured, no mixed digest is published.
                 workspaces = db.list_workspaces()
                 targets: list[dict[str, Any] | None] = workspaces or [None]
                 for workspace in targets:
+                    frequency = (workspace or {}).get("digest_frequency", "weekly")
+                    if frequency == "off":
+                        continue
+                    daily = frequency == "daily"
+                    start, end = (previous_day if daily else previous_week)(now, settings.zoneinfo)
                     workspace_id = workspace["id"] if workspace else None
                     if db.digest_exists(start, end, workspace_id=workspace_id):
                         continue
-                    digest_id = await digest.generate(start, end, workspace_id=workspace_id)
+                    digest_id = await digest.generate(
+                        start,
+                        end,
+                        workspace_id=workspace_id,
+                        language=language_name((workspace or {}).get("digest_locale")),
+                        title="daily digest" if daily else "weekly digest",
+                    )
                     if not digest_id:
                         continue
                     log.info(
@@ -88,14 +120,7 @@ async def run_worker() -> None:
                         workspace["name"] if workspace else "all sources",
                     )
                     markdown = db.list_digests(limit=1, workspace_id=workspace_id)[0]["markdown"]
-                    await push_digest(
-                        settings,
-                        markdown,
-                        telegram_chat_id=(
-                            workspace["digest_telegram_chat_id"] if workspace else None
-                        ),
-                        discord_webhook=workspace["digest_webhook"] if workspace else None,
-                    )
+                    await publish(workspace, start, end, markdown)
             except Exception:
                 log.exception("Digest generation error")
             await asyncio.sleep(3600)

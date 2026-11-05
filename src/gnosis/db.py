@@ -62,7 +62,10 @@ class Database:
     def upsert_sources(self, sources: Iterable[SourceConfig]) -> dict[tuple[str, str], int]:
         result: dict[tuple[str, str], int] = {}
         with self.connection() as connection:
-            connection.execute("UPDATE sources SET enabled = false, updated_at = now()")
+            # Only sources from sources.toml; channels found by "read all" (auto) keep their state.
+            connection.execute(
+                "UPDATE sources SET enabled = false, updated_at = now() WHERE NOT auto"
+            )
             for source in sources:
                 workspace_id = (
                     self._workspace_id_by_name(connection, source.workspace, source.platform)
@@ -121,6 +124,17 @@ class Database:
                 ).fetchall()
             )
 
+    _WORKSPACE_FIELDS = (
+        "allowed_role_ids",
+        "digest_webhook",
+        "digest_telegram_chat_id",
+        "read_all_channels",
+        "excluded_channel_ids",
+        "digest_channel_id",
+        "digest_frequency",
+        "digest_locale",
+    )
+
     def upsert_workspace(
         self,
         name: str,
@@ -129,39 +143,145 @@ class Database:
         allowed_role_ids: list[str] | None = None,
         digest_webhook: str | None = None,
         digest_telegram_chat_id: str | None = None,
+        read_all_channels: bool | None = None,
+        excluded_channel_ids: list[str] | None = None,
+        digest_channel_id: str | None = None,
+        digest_frequency: str | None = None,
+        digest_locale: str | None = None,
     ) -> int:
         """Leave fields set to None untouched: the dashboard saves one at a time."""
+        values = {
+            "allowed_role_ids": allowed_role_ids,
+            "digest_webhook": digest_webhook,
+            "digest_telegram_chat_id": digest_telegram_chat_id,
+            "read_all_channels": read_all_channels,
+            "excluded_channel_ids": excluded_channel_ids,
+            "digest_channel_id": digest_channel_id,
+            "digest_frequency": digest_frequency,
+            "digest_locale": digest_locale,
+        }
+        given = {key: value for key, value in values.items() if value is not None}
         with self.connection() as connection:
             row = connection.execute(
                 """
-                INSERT INTO workspaces (name, platform, external_id, allowed_role_ids,
-                                        digest_webhook, digest_telegram_chat_id)
-                VALUES (%s, %s, %s, coalesce(%s::text[], '{}'::text[]),
-                        coalesce(%s::text, ''), coalesce(%s::text, ''))
+                INSERT INTO workspaces (name, platform, external_id) VALUES (%s, %s, %s)
                 ON CONFLICT (name) DO UPDATE SET
                     platform = coalesce(EXCLUDED.platform, workspaces.platform),
                     external_id = coalesce(EXCLUDED.external_id, workspaces.external_id),
-                    allowed_role_ids = coalesce(%s::text[], workspaces.allowed_role_ids),
-                    digest_webhook = coalesce(%s::text, workspaces.digest_webhook),
-                    digest_telegram_chat_id = coalesce(
-                        %s::text, workspaces.digest_telegram_chat_id
-                    ),
                     updated_at = now()
                 RETURNING id
                 """,
-                (
-                    name,
-                    platform,
-                    external_id,
-                    allowed_role_ids,
-                    digest_webhook,
-                    digest_telegram_chat_id,
-                    allowed_role_ids,
-                    digest_webhook,
-                    digest_telegram_chat_id,
-                ),
+                (name, platform, external_id),
             ).fetchone()
-            return row["id"]
+            workspace_id = row["id"]
+            for key, value in given.items():
+                # Column names come from the fixed tuple above, never from input.
+                if key not in self._WORKSPACE_FIELDS:
+                    raise ValueError(key)
+                connection.execute(
+                    f"UPDATE workspaces SET {key} = %s WHERE id = %s", (value, workspace_id)
+                )
+            if "read_all_channels" in given or "excluded_channel_ids" in given:
+                # Auto-discovered channels follow the read-all switch and exclusions,
+                # so their messages leave digests and answers at once.
+                connection.execute(
+                    """
+                    UPDATE sources s SET updated_at = now(),
+                        enabled = w.read_all_channels
+                                  AND NOT (s.external_id = ANY(w.excluded_channel_ids))
+                    FROM workspaces w
+                    WHERE s.workspace_id = w.id AND w.id = %s AND s.auto
+                    """,
+                    (workspace_id,),
+                )
+            return workspace_id
+
+    def ensure_auto_source(self, guild_id: str, channel_id: str, name: str) -> int | None:
+        """Register a channel collected by "read all". None when the server does not read
+        all channels, the channel is excluded, or it is a private /gnosis channel."""
+        with self.connection() as connection:
+            workspace = connection.execute(
+                """
+                SELECT id FROM workspaces
+                WHERE platform = 'discord' AND external_id = %s AND read_all_channels
+                  AND NOT (%s = ANY(excluded_channel_ids))
+                """,
+                (guild_id, channel_id),
+            ).fetchone()
+            private = connection.execute(
+                "SELECT 1 FROM private_channels WHERE channel_id = %s", (channel_id,)
+            ).fetchone()
+            if workspace is None or private is not None:
+                return None
+            row = connection.execute(
+                """
+                INSERT INTO sources (platform, external_id, name, enabled, workspace_id, auto)
+                VALUES ('discord', %s, %s, true, %s, true)
+                ON CONFLICT (platform, external_id) DO UPDATE SET
+                    name = CASE WHEN sources.auto THEN EXCLUDED.name ELSE sources.name END,
+                    enabled = CASE WHEN sources.auto THEN true ELSE sources.enabled END,
+                    updated_at = now()
+                RETURNING id, enabled
+                """,
+                (channel_id, name, workspace["id"]),
+            ).fetchone()
+            return row["id"] if row["enabled"] else None
+
+    def private_channel(self, guild_id: str, user_id: str) -> str | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT channel_id FROM private_channels WHERE guild_id = %s AND user_id = %s",
+                (guild_id, user_id),
+            ).fetchone()
+            return row["channel_id"] if row else None
+
+    def set_private_channel(self, guild_id: str, user_id: str, channel_id: str) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO private_channels (guild_id, user_id, channel_id) VALUES (%s, %s, %s)
+                ON CONFLICT (guild_id, user_id) DO UPDATE SET
+                    channel_id = EXCLUDED.channel_id, created_at = now()
+                """,
+                (guild_id, user_id, channel_id),
+            )
+
+    def user_llm_key(self, user_id: str) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            return connection.execute(
+                "SELECT * FROM user_llm_keys WHERE discord_user_id = %s", (user_id,)
+            ).fetchone()
+
+    def set_user_llm_key(self, user_id: str, encrypted: str, base_url: str, model: str) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO user_llm_keys (discord_user_id, api_key_encrypted, base_url, model)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (discord_user_id) DO UPDATE SET
+                    api_key_encrypted = EXCLUDED.api_key_encrypted,
+                    base_url = EXCLUDED.base_url, model = EXCLUDED.model, updated_at = now()
+                """,
+                (user_id, encrypted, base_url, model),
+            )
+
+    def delete_user_llm_key(self, user_id: str) -> bool:
+        with self.connection() as connection:
+            result = connection.execute(
+                "DELETE FROM user_llm_keys WHERE discord_user_id = %s", (user_id,)
+            )
+            return result.rowcount > 0
+
+    def source_id(self, platform: str, external_id: str) -> int | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT id FROM sources
+                WHERE platform = %s AND lower(external_id) = %s AND enabled
+                """,
+                (platform, external_id.lower()),
+            ).fetchone()
+            return row["id"] if row else None
 
     def delete_workspace(self, workspace_id: int) -> None:
         with self.connection() as connection:
@@ -432,6 +552,33 @@ class Database:
                     (start, end, workspace_id, workspace_id, workspace_id),
                 ).fetchall()
             )
+
+    def messages_for_member(
+        self,
+        workspace_id: int,
+        guild_id: str,
+        channel_ids: list[str],
+        start: datetime | None,
+        end: datetime | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Most recent processed messages of a server in the channels a member can read."""
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT m.id, m.author, m.sent_at, m.text, m.url, s.platform,
+                       s.name AS source_name
+                FROM messages m JOIN sources s ON s.id = m.source_id
+                WHERE s.enabled AND m.status = 'processed' AND s.platform = 'discord'
+                  AND s.workspace_id = %s AND m.metadata->>'guild_id' = %s
+                  AND s.external_id = ANY(%s::text[])
+                  AND (%s::timestamptz IS NULL OR m.sent_at >= %s)
+                  AND (%s::timestamptz IS NULL OR m.sent_at < %s)
+                ORDER BY m.sent_at DESC LIMIT %s
+                """,
+                (workspace_id, guild_id, channel_ids, start, start, end, end, limit),
+            ).fetchall()
+            return list(reversed(rows))
 
     def save_digest(
         self,

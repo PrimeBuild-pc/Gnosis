@@ -242,6 +242,7 @@ const renderPlatform = platform => async container => {
           Shell.reloadWorkspaces();
         } catch (error) { showError(result, error); }
       });
+      serverCard.append(serverModeForm(workspace));
     }
   }
 
@@ -671,3 +672,116 @@ const GNOSIS_MODULES = [
   {id: 'status', group: 'system', icon: '📊', labelKey: 'nav.status', render: renderStatus},
   {id: 'settings', group: 'system', icon: '⚙', labelKey: 'nav.settings', render: renderSettings},
 ];
+
+// Read-all channels, exclusions and digest channel/frequency for one Discord server.
+const serverModeForm = workspace => {
+  const wrap = el('div', {className: 'server-mode'});
+  const form = el('form');
+  const label = (key, control) => {
+    const node = el('label', {className: 'checkbox-row'});
+    node.append(control, el('span', {text: () => t(key)}));
+    return node;
+  };
+  const readAll = el('input', {type: 'checkbox', id: 'ws-read-all'});
+  readAll.checked = workspace.read_all_channels !== false;
+  const excludedBox = el('fieldset', {className: 'channel-list'});
+  const excludedLegend = el('legend', {text: () => t('workspace.excluded')});
+  const digestChannel = el('select', {id: 'ws-digest-channel'});
+  const createChannel = el('button', {className: 'small', text: () => t('workspace.createDigestChannel'), type: 'button'});
+  const frequency = el('select', {id: 'ws-frequency'});
+  ['weekly', 'daily', 'off'].forEach(value => {
+    const option = el('option', {text: () => t(`workspace.frequency.${value}`)});
+    option.value = value;
+    frequency.append(option);
+  });
+  frequency.value = workspace.digest_frequency || 'weekly';
+  const language = el('select', {id: 'ws-digest-locale'});
+  LANGUAGES.forEach(([code, name]) => {
+    const option = el('option', {text: name});
+    option.value = code;
+    language.append(option);
+  });
+  language.value = workspace.digest_locale || 'en';
+
+  const labelled = (key, control, id) => {
+    const node = el('div', {className: 'field'});
+    const caption = el('label', {text: () => t(key)});
+    caption.htmlFor = id;
+    node.append(caption, control);
+    return node;
+  };
+  const channelRow = el('div', {className: 'inline'});
+  channelRow.append(digestChannel, createChannel);
+  const save = el('button', {className: 'primary', text: () => t('workspace.save'), type: 'submit'});
+  const result = el('p', {className: 'hint'});
+  excludedBox.append(excludedLegend);
+  form.append(
+    el('h4', {text: () => t('workspace.serverMode')}),
+    label('workspace.readAll', readAll),
+    excludedBox,
+    labelled('workspace.digestChannel', channelRow, 'ws-digest-channel'),
+    labelled('workspace.frequency', frequency, 'ws-frequency'),
+    labelled('workspace.digestLanguage', language, 'ws-digest-locale'),
+    save,
+  );
+  wrap.append(form, result);
+
+  const fillChannels = rows => {
+    const channels = rows.filter(row => row.workspace_external_id === workspace.external_id);
+    const excluded = new Set(workspace.excluded_channel_ids || []);
+    excludedBox.replaceChildren(excludedLegend, ...channels.map(row => {
+      const box = el('input', {type: 'checkbox'});
+      box.value = row.external_id;
+      box.checked = excluded.has(row.external_id);
+      const node = el('label', {className: 'checkbox-row'});
+      node.append(box, el('span', {text: row.name}));
+      return node;
+    }));
+    if (!channels.length) excludedBox.append(el('p', {className: 'empty', text: () => t('workspace.noChannelsYet')}));
+    const none = el('option', {text: () => t('workspace.noDigestChannel')});
+    none.value = '';
+    digestChannel.replaceChildren(none, ...channels.map(row => {
+      const option = el('option', {text: row.name});
+      option.value = row.external_id;
+      return option;
+    }));
+    digestChannel.value = workspace.digest_channel_id || '';
+  };
+  const syncDisabled = () => { excludedBox.disabled = !readAll.checked; };
+  readAll.addEventListener('change', syncDisabled);
+  syncDisabled();
+  request('/api/available-sources?platform=discord').then(fillChannels)
+    .catch(error => showError(result, error));
+
+  createChannel.addEventListener('click', async () => {
+    try {
+      const created = await request(`/api/workspaces/${workspace.id}/digest-channel`, {method: 'POST'});
+      workspace.digest_channel_id = created.channel_id;
+      const option = el('option', {text: '#gnosis-digest'});
+      option.value = created.channel_id;
+      digestChannel.append(option);
+      digestChannel.value = created.channel_id;
+      setText(result, () => t('workspace.digestChannelCreated'));
+    } catch (error) { showError(result, error); }
+  });
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    try {
+      await request('/api/workspaces', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: workspace.name,
+          read_all_channels: readAll.checked,
+          excluded_channel_ids: [...excludedBox.querySelectorAll('input:checked')].map(box => box.value),
+          digest_channel_id: digestChannel.value,
+          digest_frequency: frequency.value,
+          digest_locale: language.value,
+        }),
+      });
+      setText(result, () => t('settings.savedLive'));
+      Shell.reloadWorkspaces();
+    } catch (error) { showError(result, error); }
+  });
+  return wrap;
+};

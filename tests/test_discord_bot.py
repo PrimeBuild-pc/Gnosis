@@ -42,6 +42,9 @@ def command_harness(monkeypatch):
 
             return register
 
+        def add_command(self, group):
+            commands[group.name] = group
+
     class FakeClient:
         def __init__(self, **kwargs):
             options.update(kwargs)
@@ -252,7 +255,19 @@ def test_real_command_tree_serializes_localizations_offline(monkeypatch):
         )
     )
     sync.assert_awaited_once()
-    assert set(payloads) == {"ask", "digest", "help"}
+    assert set(payloads) == {"ask", "digest", "help", "gnosis"}
+    subcommands = {option["name"]: option for option in payloads["gnosis"]["options"]}
+    assert set(subcommands) == {"create", "key", "forget", "resume"}
+    for locale in ("it", "es-ES", "ru", "zh-CN"):
+        assert payloads["gnosis"]["description_localizations"][locale] == message(
+            "gnosis_description", locale
+        )
+        assert subcommands["resume"]["description_localizations"][locale] == message(
+            "resume_description", locale
+        )
+        start = subcommands["resume"]["options"][0]
+        assert start["name"] == "start" and start["required"] is False
+        assert start["description_localizations"][locale] == message("start_description", locale)
     for locale in ("en-US", "it", "es-ES", "ru", "zh-CN", "zh-TW", "de"):
         for command in ("ask", "digest", "help"):
             assert payloads[command]["description_localizations"][locale] == message(

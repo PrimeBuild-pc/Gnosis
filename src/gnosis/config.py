@@ -38,6 +38,8 @@ class Settings:
     telegram_bot_token: str = ""
     telegram_allowed_user_ids: tuple[int, ...] = field(default_factory=tuple)
     discord_bot_token: str = ""
+    # Encrypts members' own API keys; falls back to the bot token when unset.
+    secret_key: str = ""
     discord_allowed_role_ids: tuple[int, ...] = field(default_factory=tuple)
     digest_telegram_chat_id: str = ""
     digest_discord_webhook: str = ""
@@ -90,6 +92,7 @@ class Settings:
                 int(value) for value in allowed_users.split(",") if value.strip()
             ),
             discord_bot_token=os.getenv("DISCORD_BOT_TOKEN", ""),
+            secret_key=os.getenv("GNOSIS_SECRET_KEY", "") or os.getenv("DISCORD_BOT_TOKEN", ""),
             discord_allowed_role_ids=tuple(
                 int(value) for value in allowed_roles.split(",") if value.strip()
             ),
