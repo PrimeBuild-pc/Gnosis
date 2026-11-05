@@ -137,6 +137,7 @@ _GNOSIS_MESSAGES = {
         "channels_saved_only": "Saved. Your summaries will include only: {channels}. Channels you cannot read or that an administrator excluded are always skipped.",
         "channels_saved_exclude": "Saved. Your summaries will leave out: {channels}.",
         "channels_cleared": "Done: your summaries include every channel you can read again.",
+        "member_commands_disabled": "On this server the administrator has turned off personal summaries. Read the server digest instead.",
         "resume_error": "Summary failed. Check your key, base URL and model with `/gnosis key`.",
     },
     "it": {
@@ -179,6 +180,7 @@ _GNOSIS_MESSAGES = {
         "channels_saved_only": "Salvato. I tuoi riassunti includeranno solo: {channels}. I canali che non puoi leggere o esclusi da un amministratore vengono sempre saltati.",
         "channels_saved_exclude": "Salvato. I tuoi riassunti escluderanno: {channels}.",
         "channels_cleared": "Fatto: i tuoi riassunti includono di nuovo tutti i canali che puoi leggere.",
+        "member_commands_disabled": "Su questo server l'amministratore ha disattivato i riassunti personali. Leggi il digest del server.",
         "resume_error": "Riassunto non riuscito. Controlla chiave, base URL e modello con `/gnosis key`.",
     },
     "es": {
@@ -221,6 +223,7 @@ _GNOSIS_MESSAGES = {
         "channels_saved_only": "Guardado. Tus resúmenes incluirán solo: {channels}. Los canales que no puedes leer o que un administrador excluyó siempre se omiten.",
         "channels_saved_exclude": "Guardado. Tus resúmenes excluirán: {channels}.",
         "channels_cleared": "Hecho: tus resúmenes vuelven a incluir todos los canales que puedes leer.",
+        "member_commands_disabled": "En este servidor el administrador ha desactivado los resúmenes personales. Consulta el resumen del servidor.",
         "resume_error": "No se pudo crear el resumen. Revisa tu clave, base URL y modelo con `/gnosis key`.",
     },
     "ru": {
@@ -263,6 +266,7 @@ _GNOSIS_MESSAGES = {
         "channels_saved_only": "Сохранено. Сводки будут включать только: {channels}. Недоступные вам каналы и каналы, исключённые администратором, всегда пропускаются.",
         "channels_saved_exclude": "Сохранено. Сводки не будут включать: {channels}.",
         "channels_cleared": "Готово: сводки снова включают все доступные вам каналы.",
+        "member_commands_disabled": "На этом сервере администратор отключил личные сводки. Читайте дайджест сервера.",
         "resume_error": "Не удалось создать сводку. Проверьте ключ, base URL и модель через `/gnosis key`.",
     },
     "zh": {
@@ -305,6 +309,7 @@ _GNOSIS_MESSAGES = {
         "channels_saved_only": "已保存。你的摘要将仅包含：{channels}。你无法阅读或被管理员排除的频道始终会被跳过。",
         "channels_saved_exclude": "已保存。你的摘要将排除：{channels}。",
         "channels_cleared": "完成：你的摘要重新包含你能阅读的所有频道。",
+        "member_commands_disabled": "此服务器的管理员已关闭个人摘要。请查看服务器摘要。",
         "resume_error": "摘要生成失败。请用 `/gnosis key` 检查密钥、Base URL 和模型。",
     },
 }

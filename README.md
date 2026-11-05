@@ -237,6 +237,8 @@ automatically; there are no IDs to copy.
    - keep **Read every channel Gnosis can see** on, and tick any channel to exclude;
    - choose the digest channel or click **Create #gnosis-digest** (read-only for members);
    - choose the frequency (weekly on Monday, daily, or off) and the digest language.
+   - keep **Let members use /gnosis** on for private member summaries, or turn it off to use
+     Gnosis only as an automatic digest publisher (members can still run `/gnosis forget`).
 5. **Tell members** to run `/gnosis key` once, then `/gnosis resume` in any channel.
 
 That is all. On first start the worker reads the latest 200 messages of every readable
