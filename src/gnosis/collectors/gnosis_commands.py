@@ -107,22 +107,20 @@ def register(
         name="gnosis", description=desc("gnosis_description"), guild_only=True
     )
 
-    @group.command(name="create", description=desc("create_description"))
-    async def create(interaction: discord.Interaction) -> None:
+    async def private_channel_for(interaction: discord.Interaction) -> tuple[Any, bool]:
+        """The member's private channel, created on first use. (None, False) after replying
+        when it cannot be created."""
         guild = interaction.guild
-        if guild is None or workspace_of(interaction) is None:
-            await reply(interaction, "not_configured")
-            return
         user = interaction.user
         existing_id = db.private_channel(str(guild.id), str(user.id))
         existing = guild.get_channel(int(existing_id)) if existing_id else None
         if existing is not None:
-            await reply(interaction, "private_exists", channel=existing.mention)
-            return
+            return existing, False
         if not guild.me.guild_permissions.manage_channels:
             await reply(interaction, "need_manage_channels")
-            return
-        await interaction.response.defer(ephemeral=True)
+            return None, False
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
         hidden = discord.PermissionOverwrite(view_channel=False)
         member_access = discord.PermissionOverwrite(
             view_channel=True, send_messages=True, read_message_history=True
@@ -145,7 +143,17 @@ def register(
             message("private_welcome", locale_of(interaction)).format(user=user.mention),
             allowed_mentions=discord.AllowedMentions(users=[user]),
         )
-        await reply(interaction, "private_created", channel=channel.mention)
+        return channel, True
+
+    @group.command(name="create", description=desc("create_description"))
+    async def create(interaction: discord.Interaction) -> None:
+        if interaction.guild is None or workspace_of(interaction) is None:
+            await reply(interaction, "not_configured")
+            return
+        channel, created = await private_channel_for(interaction)
+        if channel is not None:
+            key = "private_created" if created else "private_exists"
+            await reply(interaction, key, channel=channel.mention)
 
     class KeyModal(discord.ui.Modal):
         def __init__(self, locale: str) -> None:
@@ -204,9 +212,6 @@ def register(
             await reply(interaction, "not_configured")
             return
         guild_id, user_id = str(interaction.guild_id), str(interaction.user.id)
-        if db.private_channel(guild_id, user_id) != str(interaction.channel_id):
-            await reply(interaction, "need_private_channel")
-            return
         stored = db.user_llm_key(user_id)
         api_key = (
             secretbox.decrypt(settings.secret_key, stored["api_key_encrypted"]) if stored else None
@@ -225,9 +230,12 @@ def register(
         if not rows:
             await reply(interaction, "no_messages")
             return
+        # Usable from any channel: the summary always goes to the member's private channel.
+        channel, _ = await private_channel_for(interaction)
+        if channel is None:
+            return
         period = f"{start or message('resume_all_time', locale)} → {end or '…'}"
-        await reply(interaction, "resume_working", count=str(len(rows)))
-        channel = interaction.channel
+        await reply(interaction, "resume_working", count=str(len(rows)), channel=channel.mention)
         try:
             chunks = await build_resume(
                 user_text_fn(api_key, stored["base_url"], stored["model"]),
