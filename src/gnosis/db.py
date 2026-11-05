@@ -277,6 +277,35 @@ class Database:
                 (guild_id, user_id, channel_id),
             )
 
+    def member_channel_prefs(self, guild_id: str, user_id: str) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            return connection.execute(
+                "SELECT mode, channel_ids FROM member_channel_prefs "
+                "WHERE guild_id = %s AND user_id = %s",
+                (guild_id, user_id),
+            ).fetchone()
+
+    def set_member_channel_prefs(
+        self, guild_id: str, user_id: str, mode: str | None, channel_ids: list[str]
+    ) -> None:
+        """mode None clears the preference (all readable channels)."""
+        with self.connection() as connection:
+            if mode is None:
+                connection.execute(
+                    "DELETE FROM member_channel_prefs WHERE guild_id = %s AND user_id = %s",
+                    (guild_id, user_id),
+                )
+                return
+            connection.execute(
+                """
+                INSERT INTO member_channel_prefs (guild_id, user_id, mode, channel_ids)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (guild_id, user_id) DO UPDATE SET
+                    mode = EXCLUDED.mode, channel_ids = EXCLUDED.channel_ids, updated_at = now()
+                """,
+                (guild_id, user_id, mode, channel_ids),
+            )
+
     def user_llm_key(self, user_id: str) -> dict[str, Any] | None:
         with self.connection() as connection:
             return connection.execute(

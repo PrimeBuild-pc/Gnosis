@@ -40,6 +40,16 @@ def parse_period(
     return first, last
 
 
+def apply_channel_prefs(readable: list[str], prefs: dict[str, Any] | None) -> list[str]:
+    """Narrow the member's readable channels with their own choice; never widen them."""
+    if not prefs:
+        return readable
+    chosen = set(prefs["channel_ids"])
+    if prefs["mode"] == "only":
+        return [channel for channel in readable if channel in chosen]
+    return [channel for channel in readable if channel not in chosen]
+
+
 def validate_key_input(base_url: str, model: str) -> str | None:
     """Return the i18n key of the problem, or None when the input is acceptable."""
     if base_url and not base_url.startswith("https://"):
@@ -224,8 +234,12 @@ def register(
         except ValueError:
             await reply(interaction, "bad_date")
             return
+        channels = apply_channel_prefs(
+            readable_channels(interaction), db.member_channel_prefs(guild_id, user_id)
+        )
+        # Admin exclusions are applied by messages_for_member (excluded sources are disabled).
         rows = db.messages_for_member(
-            workspace["id"], guild_id, readable_channels(interaction), first, last, RESUME_LIMIT
+            workspace["id"], guild_id, channels, first, last, RESUME_LIMIT
         )
         if not rows:
             await reply(interaction, "no_messages")
@@ -249,5 +263,58 @@ def register(
         except Exception:
             log.exception("Discord: /gnosis resume failed")
             await channel.send(message("resume_error", locale))
+
+    class ChannelPicker(discord.ui.View):
+        def __init__(self, mode: str, locale: str) -> None:
+            super().__init__(timeout=300)
+            self.mode = mode
+            select = discord.ui.ChannelSelect(
+                channel_types=[discord.ChannelType.text, discord.ChannelType.news],
+                min_values=1,
+                max_values=25,
+                placeholder=message(f"channels_pick_{mode}", locale),
+            )
+            select.callback = self.picked
+            self.select = select
+            self.add_item(select)
+
+        async def picked(self, interaction: discord.Interaction) -> None:
+            ids = [str(channel.id) for channel in self.select.values]
+            db.set_member_channel_prefs(
+                str(interaction.guild_id), str(interaction.user.id), self.mode, ids
+            )
+            mentions = ", ".join(f"<#{channel_id}>" for channel_id in ids)
+            await interaction.response.edit_message(
+                content=message(f"channels_saved_{self.mode}", locale_of(interaction)).format(
+                    channels=mentions
+                ),
+                view=None,
+            )
+
+    mode_choices = [
+        discord.app_commands.Choice(name=desc(f"mode_{value}"), value=value)
+        for value in ("only", "exclude", "all")
+    ]
+
+    @group.command(name="channels", description=desc("channels_description"))
+    @discord.app_commands.describe(mode=desc("mode_description"))
+    @discord.app_commands.choices(mode=mode_choices)
+    async def channels(
+        interaction: discord.Interaction, mode: discord.app_commands.Choice[str]
+    ) -> None:
+        if workspace_of(interaction) is None:
+            await reply(interaction, "not_configured")
+            return
+        if mode.value == "all":
+            db.set_member_channel_prefs(
+                str(interaction.guild_id), str(interaction.user.id), None, []
+            )
+            await reply(interaction, "channels_cleared")
+            return
+        await interaction.response.send_message(
+            message(f"channels_pick_{mode.value}", locale_of(interaction)),
+            view=ChannelPicker(mode.value, locale_of(interaction)),
+            ephemeral=True,
+        )
 
     client.tree.add_command(group)
