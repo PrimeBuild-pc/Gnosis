@@ -290,7 +290,6 @@ const submitEvent = {preventDefault() {}};
     '/api/settings/ai-processing': {enabled: false},
     '/api/ignored-authors': [{platform: 'discord', author_id: 'User author ID'}],
     '/api/workspaces': [{id: 7, name: 'User server'}],
-    '/api/bots': [],
   };
   const app = harness({fetcher: async url => ({ok: true, json: async () => fixtures[url.split('?')[0]]})});
   app.context.Shell = {reloadWorkspaces: async () => {}};

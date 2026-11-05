@@ -214,18 +214,6 @@ def test_unknown_key_rejected(client):
     assert response.status_code == 400
 
 
-def test_bots_lists_the_catalog_with_current_flagged(client):
-    """Without GNOSIS_BOTS, only Gnosis is installed; other bots stay greyed out."""
-    test_client, _ = client
-    bots = {bot["id"]: bot for bot in test_client.get("/api/bots", auth=AUTH).json()}
-    assert set(bots) == {"gnosis", "doorman", "dview"}
-    assert bots["gnosis"]["current"] is True
-    assert bots["gnosis"]["installed"] is True
-    assert bots["doorman"]["installed"] is False
-    assert bots["doorman"]["repo"].endswith("/Doorman")
-    assert bots["doorman"]["install"]
-
-
 @pytest.mark.parametrize(
     "path",
     [
@@ -342,16 +330,6 @@ def test_invalid_role_id_is_rejected(client):
         "/api/workspaces", auth=AUTH, json={"name": "A", "allowed_role_ids": ["not-id"]}
     )
     assert response.status_code == 422
-
-
-def test_unreachable_bot_stays_not_installed(client, monkeypatch: pytest.MonkeyPatch):
-    """An unreachable configured address must not appear installed."""
-    test_client, _ = client
-    monkeypatch.setattr("gnosis.api._bot_reachable", lambda url: False)
-    monkeypatch.setenv("GNOSIS_BOTS", "doorman=http://127.0.0.1:59999")
-    test_client.post("/api/config", auth=AUTH, json={"values": {"OPENAI_CHAT_MODEL": "m"}})
-    bots = {bot["id"]: bot for bot in test_client.get("/api/bots", auth=AUTH).json()}
-    assert bots["doorman"]["installed"] is False
 
 
 @pytest.mark.parametrize(

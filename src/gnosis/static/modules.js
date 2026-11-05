@@ -2,6 +2,14 @@
 
 const PLATFORMS = ['discord', 'telegram', 'reddit'];
 
+/** Native disclosure: secondary or long content stays one click away. */
+const collapsible = (summaryKey, open = false) => {
+  const box = el('details', {className: 'disclosure'});
+  box.open = open;
+  box.append(el('summary', {text: () => t(summaryKey)}));
+  return box;
+};
+
 // ---------------------------------------------------------------- overview
 
 const renderOverview = async container => {
@@ -14,19 +22,19 @@ const renderOverview = async container => {
       request(`/api/stats${AppState.scopeQuery()}`),
     ]);
 
-    const summary = card('overview.collected');
     const workspace = AppState.currentWorkspace();
-    summary.append(el('p', {
-      className: 'hint',
-      text: () => t('overview.counts', {
-        sources: stats.sources, messages: stats.messages, digests: stats.digests,
-      }),
-    }));
-    summary.append(el('p', {
-      className: 'hint faint',
+    const tiles = el('div', {className: 'tiles'});
+    [['sources', 'overview.tile.sources'], ['messages', 'overview.tile.messages'],
+      ['digests', 'overview.tile.digests']].forEach(([key, labelKey]) => {
+      const tile = el('div', {className: 'tile'});
+      tile.append(el('strong', {text: Number(stats[key] || 0).toLocaleString(currentLanguage)}),
+        el('span', {text: () => t(labelKey)}));
+      tiles.append(tile);
+    });
+    box.append(tiles, el('p', {
+      className: 'hint faint scope-note',
       text: () => workspace ? t('overview.scoped', {name: workspace.name}) : t('overview.global'),
     }));
-    box.append(summary);
 
     const checklist = card('settings.setupTitle');
     steps.forEach(step => {
@@ -160,11 +168,13 @@ const renderDigests = async container => {
 const renderPlatform = platform => async container => {
   container.append(moduleHead(`section.${platform}`, `section.${platform}.intro`));
 
-  const credentials = card('platform.credentials');
-  const sourcesCard = card('platform.sources', `platform.sources.${platform}`);
+  // Order: the selected server first (what admins change most), then what is read,
+  // then bot credentials, which are set once.
   const serverCard = card('platform.serverSettings');
-  container.append(credentials);
+  const sourcesCard = card('platform.sources', `platform.sources.${platform}`);
+  const credentials = card('platform.credentials');
   if (platform === 'discord') {
+    container.append(serverCard);
     const invite = el('a', {className: 'button primary', text: () => t('platform.invite')});
     invite.target = '_blank';
     invite.rel = 'noopener noreferrer';
@@ -172,9 +182,8 @@ const renderPlatform = platform => async container => {
     credentials.append(el('p', {className: 'hint', text: () => t('platform.inviteHint')}), invite);
     request('/api/discord/invite').then(({url}) => { invite.href = url; invite.hidden = false; })
       .catch(() => {});
-    container.append(serverCard);
   }
-  container.append(sourcesCard);
+  container.append(sourcesCard, credentials);
 
   // --- platform credentials ---
   try {
@@ -190,7 +199,9 @@ const renderPlatform = platform => async container => {
     const save = el('button', {className: 'primary', text: () => t('settings.save'), type: 'submit'});
     const result = el('p', {className: 'hint'});
     form.append(save);
-    credentials.append(el('p', {className: 'hint faint', text: () => t('settings.maskNote')}), form, result);
+    const credentialDetails = collapsible('platform.credentialsEdit');
+    credentialDetails.append(el('p', {className: 'hint faint', text: () => t('settings.maskNote')}), form, result);
+    credentials.append(credentialDetails);
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
@@ -230,7 +241,10 @@ const renderPlatform = platform => async container => {
       const save = el('button', {className: 'primary', text: () => t('workspace.save'), type: 'submit'});
       const result = el('p', {className: 'hint'});
       form.append(external, roles, webhook, save);
-      serverCard.append(form, result);
+      serverCard.append(serverModeForm(workspace));
+      const advanced = collapsible('workspace.advanced');
+      advanced.append(form, result);
+      serverCard.append(advanced);
 
       form.addEventListener('submit', async event => {
         event.preventDefault();
@@ -251,14 +265,25 @@ const renderPlatform = platform => async container => {
           Shell.reloadWorkspaces();
         } catch (error) { showError(result, error); }
       });
-      serverCard.append(serverModeForm(workspace));
     }
   }
 
   // --- collected channels on this platform ---
-  const list = el('div');
-  sourcesCard.append(el('p', {className: 'hint callout accent', text: () => t('sources.commandNote')}));
-  sourcesCard.append(list);
+  const list = el('div', {className: 'source-list'});
+  const listBox = collapsible('sources.listTitle');
+  const filter = el('input', {type: 'search'});
+  bindLocale(filter, () => {
+    filter.placeholder = t('sources.filter');
+    filter.setAttribute('aria-label', t('sources.filter'));
+  });
+  filter.addEventListener('input', () => {
+    const needle = filter.value.trim().toLowerCase();
+    list.querySelectorAll('.list-row').forEach(row => {
+      row.hidden = Boolean(needle) && !row.textContent.toLowerCase().includes(needle);
+    });
+  });
+  listBox.append(filter, list);
+  sourcesCard.append(el('p', {className: 'hint callout accent', text: () => t('sources.commandNote')}), listBox);
 
   const loadSources = async () => {
     try {
@@ -266,6 +291,8 @@ const renderPlatform = platform => async container => {
       const mine = all.filter(source => source.platform === platform)
         .filter(source => AppState.workspaceId() === null
           || source.workspace_id === AppState.workspaceId());
+      const active = mine.filter(source => source.enabled).length;
+      setText(listBox.querySelector('summary'), () => t('sources.listSummary', {n: mine.length, active}));
       if (!mine.length) { list.replaceChildren(emptyState('sources.none')); return; }
       list.replaceChildren(...mine.map(source => {
         const detail = () => [
@@ -317,7 +344,9 @@ const renderPlatform = platform => async container => {
   const save = el('button', {className: 'primary', text: () => t('sources.save'), type: 'submit'});
   const result = el('p', {className: 'hint'});
   form.append(pickLabel, pickHint, idField, nameField, wsField, topicsField, save);
-  sourcesCard.append(el('h3', {text: () => t('sources.addTitle')}), form, result);
+  const addBox = collapsible('sources.addTitle');
+  addBox.append(form, result);
+  sourcesCard.append(addBox);
 
   if (platform !== 'reddit') {
     request(`/api/available-sources?platform=${platform}`).then(rows => {
@@ -402,6 +431,7 @@ const renderStatus = async container => {
         return worker.detail ? `${state} · ${worker.detail}` : state;
       });
       row.prepend(el('span', {className: worker.status === 'ok' ? 'dot on' : 'dot warn'}));
+      row.classList.add('compact');
       connectors.append(row);
     });
     if (!data.workers.length) connectors.append(emptyState('status.noWorkers'));
@@ -410,9 +440,14 @@ const renderStatus = async container => {
       const workspace = AppState.currentWorkspace();
       return !workspace || source.workspace_name === workspace.name;
     });
-    if (!visible.length) sources.append(emptyState('sources.none'));
+    const pending = visible.reduce((sum, source) => sum + (source.pending || 0), 0);
+    const sourceBox = collapsible('status.sources');
+    setText(sourceBox.querySelector('summary'),
+      () => t('status.sourcesSummary', {n: visible.length, pending}));
+    sources.append(sourceBox);
+    if (!visible.length) sourceBox.append(emptyState('sources.none'));
     visible.forEach(source => {
-      sources.append(listRow(
+      sourceBox.append(listRow(
         `${source.platform} · ${source.name}`,
         () => t('status.activity', {
           date: source.last_processed_at ? formatDate(source.last_processed_at) : t('status.never'),
@@ -502,7 +537,7 @@ const renderSettings = async container => {
     })));
     const result = el('p', {className: 'hint'});
     form.append(el('button', {className: 'primary', text: () => t('settings.save'), type: 'submit'}));
-    llm.append(form, result);
+    llm.append(el('p', {className: 'hint faint', text: () => t('settings.maskNote')}), form, result);
     form.addEventListener('submit', async event => {
       event.preventDefault();
       const values = {};
@@ -517,6 +552,25 @@ const renderSettings = async container => {
       } catch (error) { showError(result, error); }
     });
   } catch (error) { showError(llm, error); }
+
+  // --- automatic AI usage ---
+  const aiCard = card('ai.title', 'ai.intro');
+  container.append(aiCard);
+  const aiToggle = el('input', {type: 'checkbox', id: 'ai-processing'});
+  const aiRow = el('label', {className: 'checkbox-row'});
+  aiRow.append(aiToggle, el('span', {text: () => t('ai.toggle')}));
+  const aiResult = el('p', {className: 'hint'});
+  aiCard.append(aiRow, el('p', {className: 'hint', text: () => t('ai.digestNote')}), aiResult);
+  request('/api/settings/ai-processing').then(data => { aiToggle.checked = data.enabled; })
+    .catch(error => showError(aiResult, error));
+  aiToggle.addEventListener('change', async () => {
+    try {
+      await request('/api/settings/ai-processing', {
+        method: 'POST', body: JSON.stringify({enabled: aiToggle.checked}),
+      });
+      setText(aiResult, () => t('settings.savedLive'));
+    } catch (error) { showError(aiResult, error); }
+  });
 
   // --- server ---
   const servers = card('section.workspaces', 'section.workspaces.intro');
@@ -555,7 +609,9 @@ const renderSettings = async container => {
   const addResult = el('p', {className: 'hint'});
   addForm.append(nameField, extField,
     el('button', {className: 'primary', text: () => t('workspace.create'), type: 'submit'}));
-  servers.append(el('h3', {text: () => t('workspace.create')}), addForm, addResult);
+  const addServer = collapsible('workspace.addManual');
+  addServer.append(addForm, addResult);
+  servers.append(addServer);
   addForm.addEventListener('submit', async event => {
     event.preventDefault();
     try {
@@ -572,25 +628,6 @@ const renderSettings = async container => {
       await Shell.reloadWorkspaces();
       renderServers();
     } catch (error) { showError(addResult, error); }
-  });
-
-  // --- automatic AI usage ---
-  const aiCard = card('ai.title', 'ai.intro');
-  container.append(aiCard);
-  const aiToggle = el('input', {type: 'checkbox', id: 'ai-processing'});
-  const aiRow = el('label', {className: 'checkbox-row'});
-  aiRow.append(aiToggle, el('span', {text: () => t('ai.toggle')}));
-  const aiResult = el('p', {className: 'hint'});
-  aiCard.append(aiRow, el('p', {className: 'hint', text: () => t('ai.digestNote')}), aiResult);
-  request('/api/settings/ai-processing').then(data => { aiToggle.checked = data.enabled; })
-    .catch(error => showError(aiResult, error));
-  aiToggle.addEventListener('change', async () => {
-    try {
-      await request('/api/settings/ai-processing', {
-        method: 'POST', body: JSON.stringify({enabled: aiToggle.checked}),
-      });
-      setText(aiResult, () => t('settings.savedLive'));
-    } catch (error) { showError(aiResult, error); }
   });
 
   // --- retention ---
@@ -674,6 +711,7 @@ const renderSettings = async container => {
 
   // --- erasure ---
   const wipe = card('wipe.title', 'wipe.note');
+  wipe.classList.add('danger-zone');
   const wipeButton = el('button', {className: 'danger', text: () => t('wipe.button')});
   const wipeResult = el('p', {className: 'hint'});
   wipe.append(wipeButton, wipeResult);
@@ -704,6 +742,7 @@ const GNOSIS_MODULES = [
 // Read-all channels, exclusions and digest channel/frequency for one Discord server.
 const serverModeForm = workspace => {
   const wrap = el('div', {className: 'server-mode'});
+  wrap.dataset.layout = 'plain';
   const form = el('form');
   const label = (key, control) => {
     const node = el('label', {className: 'checkbox-row'});
