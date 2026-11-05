@@ -95,3 +95,95 @@ def test_previous_day_is_local_midnight_to_midnight():
     start, end = previous_day(datetime(2026, 11, 5, 0, 30, tzinfo=UTC), ROME)
     assert start.isoformat() == "2026-11-04T00:00:00+01:00"
     assert end.isoformat() == "2026-11-05T00:00:00+01:00"
+
+
+def test_resume_from_any_channel_creates_private_channel_and_posts_there(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from gnosis.collectors import gnosis_commands as gc
+    from gnosis.config import Settings
+
+    class Tree:
+        def add_command(self, group):
+            self.group = group
+
+    client = SimpleNamespace(tree=Tree())
+    settings = Settings(discord_bot_token="t", secret_key="s", timezone="Europe/Rome")
+    db = Mock()
+    db.workspace_for_external_id.return_value = {"id": 7}
+    db.private_channel.return_value = None
+    db.user_llm_key.return_value = {
+        "api_key_encrypted": secretbox.encrypt("s", "sk-member"),
+        "base_url": "",
+        "model": "",
+    }
+    db.messages_for_member.return_value = [{"id": 1}]
+    used_keys = []
+
+    def fake_text_fn(api_key, base_url, model):
+        used_keys.append(api_key)
+        return AsyncMock()
+
+    monkeypatch.setattr(gc, "user_text_fn", fake_text_fn)
+    monkeypatch.setattr(gc, "build_resume", AsyncMock(return_value=["summary"]))
+    gc.register(client, settings, db, lambda interaction: ["10"])
+    resume = client.tree.group.get_command("resume").callback
+
+    private = SimpleNamespace(id=555, mention="<#555>", send=AsyncMock())
+    public = SimpleNamespace(id=10, send=AsyncMock())
+    done = {"value": False}
+
+    async def defer(**kwargs):
+        done["value"] = True
+
+    guild = SimpleNamespace(
+        id=1,
+        me=Bot(),
+        default_role="everyone",
+        categories=[],
+        get_channel=lambda channel_id: None,
+        create_category=AsyncMock(return_value="category"),
+        create_text_channel=AsyncMock(return_value=private),
+    )
+    interaction = SimpleNamespace(
+        guild=guild,
+        guild_id=1,
+        channel=public,
+        channel_id=10,
+        locale="it",
+        user=Member(),
+        response=SimpleNamespace(
+            is_done=lambda: done["value"], defer=defer, send_message=AsyncMock()
+        ),
+        followup=SimpleNamespace(send=AsyncMock()),
+    )
+    asyncio.run(resume(interaction, None, None))
+
+    guild.create_text_channel.assert_awaited_once()
+    db.set_private_channel.assert_called_once_with("1", "42", "555")
+    assert used_keys == ["sk-member"]
+    private.send.assert_any_await("summary", allowed_mentions=ANY_MENTIONS)
+    public.send.assert_not_awaited()
+    sent = interaction.followup.send.await_args.args[0]
+    assert "<#555>" in sent and "1 messaggi" in sent
+
+
+class Member:
+    """Hashable like discord.Member, which is used as a permission-overwrite key."""
+
+    id = 42
+    name = "ann"
+    mention = "<@42>"
+
+
+class Bot:
+    guild_permissions = type("Permissions", (), {"manage_channels": True})()
+
+
+class _AnyMentions:
+    def __eq__(self, other):
+        return True
+
+
+ANY_MENTIONS = _AnyMentions()
