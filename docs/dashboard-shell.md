@@ -19,8 +19,6 @@ untrusted data, not HTML to execute.
 
 ## Backend contract
 
-- `GET /api/bots`: current application and bots configured with `GNOSIS_BOTS`.
-  The backend checks reachability; the browser opens the supplied link.
 - `GET /api/workspaces`: workspaces for the context selector.
 - `GET /api/setup`: configuration status, with help text managed by `i18n.js`.
 
@@ -40,12 +38,7 @@ Archived digests are not dynamically translated when the locale changes: their o
 generation language is retained, including existing Italian digests. New scheduled digests
 are generated in English. The operator CLI and installer are English-only.
 
-## Links to Doorman and D-View
+## Other Prime Build bots
 
-Both applications use Next.js and Discord OAuth login; they are not Gnosis modules.
-`GNOSIS_BOTS` links already existing installations; it does not share sessions, credentials,
-or permissions. Switching to another bot opens a new tab.
-
-The dashboard displays instructions for installing a missing bot, but does not execute host
-commands or mount the Docker socket. Installation and authorized operations remain documented
-in the [README](../README.md) and [operations guide](operations.md).
+Doorman and D-View are separate applications with their own repositories, installations and
+dashboards (Next.js with Discord login). Gnosis does not link to, probe or administer them.
