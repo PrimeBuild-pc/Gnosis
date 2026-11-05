@@ -259,6 +259,16 @@ channel, then follows new messages, edits and deletions live.
 Command descriptions and replies follow the member's Discord language (English, Italian,
 Spanish, Russian, Chinese).
 
+### Costs: automatic or on demand
+
+**Settings → Automatic AI usage** decides whether every new message is classified by the chat
+model in the background (tags, knowledge graph, better `/ask`). Turn it off and set each server's
+digest frequency to **Off** to spend AI credits only when someone runs a command: messages are
+still indexed with the local embedding model, and `/gnosis resume` works the same.
+
+`/gnosis resume` without dates covers only what is new since the member's previous summary
+(everything the first time); scheduled digests likewise start where the previous one ended.
+
 ### Privacy rules built in
 
 - `/gnosis resume` only uses channels the member can read right now, and only the member's own

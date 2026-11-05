@@ -227,6 +227,10 @@ def invite_url(application_id: str) -> str:
     )
 
 
+class AIProcessingUpdate(BaseModel):
+    enabled: bool
+
+
 class RetentionUpdate(BaseModel):
     days: int | None = Field(default=None, ge=1)
 
@@ -602,6 +606,15 @@ def create_app() -> FastAPI:
     def get_status(request: Request):
         db = request.app.state.db
         return {"workers": db.worker_status(), "sources": db.source_activity()}
+
+    @app.get("/api/settings/ai-processing", dependencies=[Depends(authenticate)])
+    def get_ai_processing(request: Request):
+        return {"enabled": request.app.state.db.ai_processing_enabled()}
+
+    @app.post("/api/settings/ai-processing", dependencies=[Depends(authenticate)])
+    def set_ai_processing(update: AIProcessingUpdate, request: Request):
+        request.app.state.db.set_setting("ai_processing", "on" if update.enabled else "off")
+        return {"enabled": update.enabled}
 
     @app.get("/api/settings/retention", dependencies=[Depends(authenticate)])
     def get_retention(request: Request):

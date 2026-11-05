@@ -309,6 +309,37 @@ class Database:
                 (guild_id, user_id, mode, channel_ids),
             )
 
+    def member_last_resume(self, guild_id: str, user_id: str) -> datetime | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT last_end FROM member_resume_state WHERE guild_id = %s AND user_id = %s",
+                (guild_id, user_id),
+            ).fetchone()
+            return row["last_end"] if row else None
+
+    def set_member_last_resume(self, guild_id: str, user_id: str, last_end: datetime) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO member_resume_state (guild_id, user_id, last_end) VALUES (%s, %s, %s)
+                ON CONFLICT (guild_id, user_id) DO UPDATE SET last_end = EXCLUDED.last_end
+                """,
+                (guild_id, user_id, last_end),
+            )
+
+    def last_digest_end(self, workspace_id: int | None) -> datetime | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT max(period_end) AS last FROM digests "
+                "WHERE workspace_id IS NOT DISTINCT FROM %s",
+                (workspace_id,),
+            ).fetchone()
+            return row["last"] if row else None
+
+    def ai_processing_enabled(self) -> bool:
+        """Global switch: AI classification of every collected message (costs credits)."""
+        return self.get_setting("ai_processing") != "off"
+
     def user_llm_key(self, user_id: str) -> dict[str, Any] | None:
         with self.connection() as connection:
             return connection.execute(

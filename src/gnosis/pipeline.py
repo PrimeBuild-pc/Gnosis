@@ -127,6 +127,8 @@ class Pipeline:
         messages = self.db.pending_messages(limit)
         if not messages:
             return 0
+        if not self.db.ai_processing_enabled():
+            return await self._process_locally(messages)
         compact = [
             {
                 "id": row["id"],
@@ -173,6 +175,23 @@ class Pipeline:
                 processed += 1
                 if chunks:
                     await self._extract_entities(row["id"], row["text"])
+            except Exception as error:  # noqa: BLE001 - retry boundary per message
+                self.db.fail_message(row["id"], str(error))
+        return processed
+
+    async def _process_locally(self, messages: list[dict[str, Any]]) -> int:
+        """No chat-model calls: index every message with the embedding model only
+        (local by default, so free). Summaries and /ask still work; tags and the
+        knowledge graph are not filled."""
+        processed = 0
+        for row in messages:
+            try:
+                chunks = chunk_text(row["text"])
+                embeddings = await self.llm.embed(chunks)
+                self.db.finish_message(
+                    row["id"], 1.0, [], "discussion", list(zip(chunks, embeddings, strict=True))
+                )
+                processed += 1
             except Exception as error:  # noqa: BLE001 - retry boundary per message
                 self.db.fail_message(row["id"], str(error))
         return processed

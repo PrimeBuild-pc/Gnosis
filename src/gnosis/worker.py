@@ -105,6 +105,12 @@ async def run_worker() -> None:
                     workspace_id = workspace["id"] if workspace else None
                     if db.digest_exists(start, end, workspace_id=workspace_id):
                         continue
+                    # Only what is new since the previous digest (e.g. after a frequency change).
+                    previous_end = db.last_digest_end(workspace_id)
+                    if previous_end and previous_end > start:
+                        start = previous_end
+                    if start >= end:
+                        continue
                     # A digest is published once: wait until the backlog of the period is
                     # classified, or it would summarize only part of it.
                     if db.has_unprocessed_before(end, workspace_id=workspace_id):

@@ -287,6 +287,7 @@ const submitEvent = {preventDefault() {}};
     '/api/entities': [{id: 1, name: 'User entity', type: 'User type', mentions: 2}],
     '/api/entities/1': {entity: {name: 'User entity', type: 'User type'}, mentions: [{id: 1, author: 'User author', source_name: 'User channel', sent_at: '2026-02-03T14:05:06Z', url: 'https://example.org/message'}]},
     '/api/settings/retention': {days: 30},
+    '/api/settings/ai-processing': {enabled: false},
     '/api/ignored-authors': [{platform: 'discord', author_id: 'User author ID'}],
     '/api/workspaces': [{id: 7, name: 'User server'}],
     '/api/bots': [],
