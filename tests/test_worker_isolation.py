@@ -8,14 +8,16 @@ from gnosis.config import Settings
 
 
 @pytest.mark.parametrize(
-    "workspaces,expected",
+    "workspaces,backlog,expected",
     [
-        ([{"id": 1, "name": "A"}, {"id": 2, "name": "B"}], [1, 2]),
-        ([], [None]),
+        ([{"id": 1, "name": "A"}, {"id": 2, "name": "B"}], False, [1, 2]),
+        ([], False, [None]),
+        # Unclassified messages in the period: wait instead of publishing a partial digest.
+        ([{"id": 1, "name": "A"}], True, []),
     ],
 )
 def test_scheduler_never_adds_a_mixed_digest_to_scoped_workspaces(
-    tmp_path, monkeypatch, workspaces, expected
+    tmp_path, monkeypatch, workspaces, backlog, expected
 ):
     sources = tmp_path / "sources.toml"
     sources.write_text("", encoding="utf-8")
@@ -25,6 +27,7 @@ def test_scheduler_never_adds_a_mixed_digest_to_scoped_workspaces(
     db = Mock()
     db.list_workspaces.return_value = workspaces
     db.digest_exists.return_value = False
+    db.has_unprocessed_before.return_value = backlog
     monkeypatch.setattr(worker, "Database", lambda url: db)
     monkeypatch.setattr(worker, "LLM", Mock())
     generate = AsyncMock(return_value=None)

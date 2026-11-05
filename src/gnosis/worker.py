@@ -105,6 +105,10 @@ async def run_worker() -> None:
                     workspace_id = workspace["id"] if workspace else None
                     if db.digest_exists(start, end, workspace_id=workspace_id):
                         continue
+                    # A digest is published once: wait until the backlog of the period is
+                    # classified, or it would summarize only part of it.
+                    if db.has_unprocessed_before(end, workspace_id=workspace_id):
+                        continue
                     digest_id = await digest.generate(
                         start,
                         end,

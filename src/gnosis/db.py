@@ -612,6 +612,20 @@ class Database:
             ).fetchall()
             return list(reversed(rows))
 
+    def has_unprocessed_before(self, end: datetime, workspace_id: int | None = None) -> bool:
+        """True while collected messages up to `end` still wait for classification."""
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT 1 FROM messages m JOIN sources s ON s.id = m.source_id
+                WHERE s.enabled AND m.status = 'pending' AND m.sent_at < %s
+                  AND (%s::bigint IS NULL OR s.workspace_id = %s)
+                LIMIT 1
+                """,
+                (end, workspace_id, workspace_id),
+            ).fetchone()
+            return row is not None
+
     def save_digest(
         self,
         start: datetime,
