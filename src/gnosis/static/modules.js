@@ -691,6 +691,8 @@ const serverModeForm = workspace => {
     node.append(control, el('span', {text: () => t(key)}));
     return node;
   };
+  const memberCommands = el('input', {type: 'checkbox', id: 'ws-member-commands'});
+  memberCommands.checked = workspace.member_commands_enabled !== false;
   const readAll = el('input', {type: 'checkbox', id: 'ws-read-all'});
   readAll.checked = workspace.read_all_channels !== false;
   const excludedBox = el('fieldset', {className: 'channel-list'});
@@ -731,6 +733,8 @@ const serverModeForm = workspace => {
     labelled('workspace.digestChannel', channelRow, 'ws-digest-channel'),
     labelled('workspace.frequency', frequency, 'ws-frequency'),
     labelled('workspace.digestLanguage', language, 'ws-digest-locale'),
+    label('workspace.memberCommands', memberCommands),
+    el('p', {className: 'hint', text: () => t('workspace.memberCommandsHint')}),
     save,
   );
   wrap.append(form, result);
@@ -786,6 +790,7 @@ const serverModeForm = workspace => {
           digest_channel_id: digestChannel.value,
           digest_frequency: frequency.value,
           digest_locale: language.value,
+          member_commands_enabled: memberCommands.checked,
         }),
       });
       setText(result, () => t('settings.savedLive'));

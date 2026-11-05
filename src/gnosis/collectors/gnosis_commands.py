@@ -113,6 +113,17 @@ def register(
             return None
         return db.workspace_for_external_id("discord", str(interaction.guild_id))
 
+    async def member_workspace(interaction: discord.Interaction) -> dict[str, Any] | None:
+        """The server's workspace when members may use /gnosis; otherwise reply and None."""
+        workspace = workspace_of(interaction) if interaction.guild is not None else None
+        if workspace is None:
+            await reply(interaction, "not_configured")
+            return None
+        if workspace.get("member_commands_enabled") is False:
+            await reply(interaction, "member_commands_disabled")
+            return None
+        return workspace
+
     group = discord.app_commands.Group(
         name="gnosis", description=desc("gnosis_description"), guild_only=True
     )
@@ -157,8 +168,7 @@ def register(
 
     @group.command(name="create", description=desc("create_description"))
     async def create(interaction: discord.Interaction) -> None:
-        if interaction.guild is None or workspace_of(interaction) is None:
-            await reply(interaction, "not_configured")
+        if await member_workspace(interaction) is None:
             return
         channel, created = await private_channel_for(interaction)
         if channel is not None:
@@ -204,6 +214,8 @@ def register(
 
     @group.command(name="key", description=desc("key_description"))
     async def key(interaction: discord.Interaction) -> None:
+        if await member_workspace(interaction) is None:
+            return
         await interaction.response.send_modal(KeyModal(locale_of(interaction)))
 
     @group.command(name="forget", description=desc("forget_description"))
@@ -217,9 +229,8 @@ def register(
         interaction: discord.Interaction, start: str | None = None, end: str | None = None
     ) -> None:
         locale = locale_of(interaction)
-        workspace = workspace_of(interaction)
+        workspace = await member_workspace(interaction)
         if workspace is None:
-            await reply(interaction, "not_configured")
             return
         guild_id, user_id = str(interaction.guild_id), str(interaction.user.id)
         stored = db.user_llm_key(user_id)
@@ -302,8 +313,7 @@ def register(
     async def channels(
         interaction: discord.Interaction, mode: discord.app_commands.Choice[str]
     ) -> None:
-        if workspace_of(interaction) is None:
-            await reply(interaction, "not_configured")
+        if await member_workspace(interaction) is None:
             return
         if mode.value == "all":
             db.set_member_channel_prefs(

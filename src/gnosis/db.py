@@ -133,6 +133,7 @@ class Database:
         "digest_channel_id",
         "digest_frequency",
         "digest_locale",
+        "member_commands_enabled",
     )
 
     def upsert_workspace(
@@ -148,6 +149,7 @@ class Database:
         digest_channel_id: str | None = None,
         digest_frequency: str | None = None,
         digest_locale: str | None = None,
+        member_commands_enabled: bool | None = None,
     ) -> int:
         """Leave fields set to None untouched: the dashboard saves one at a time."""
         values = {
@@ -159,6 +161,7 @@ class Database:
             "digest_channel_id": digest_channel_id,
             "digest_frequency": digest_frequency,
             "digest_locale": digest_locale,
+            "member_commands_enabled": member_commands_enabled,
         }
         given = {key: value for key, value in values.items() if value is not None}
         with self.connection() as connection:

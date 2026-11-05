@@ -173,6 +173,7 @@ class WorkspaceInput(BaseModel):
     digest_channel_id: str | None = None
     digest_frequency: Literal["off", "daily", "weekly"] | None = None
     digest_locale: Literal["en", "it", "es", "ru", "zh"] | None = None
+    member_commands_enabled: bool | None = None
 
     @field_validator("excluded_channel_ids")
     @classmethod
@@ -376,6 +377,7 @@ def create_app() -> FastAPI:
             digest_channel_id=payload.digest_channel_id,
             digest_frequency=payload.digest_frequency,
             digest_locale=payload.digest_locale,
+            member_commands_enabled=payload.member_commands_enabled,
         )
         return {"workspaces": public_workspaces(request.app.state.db)}
 

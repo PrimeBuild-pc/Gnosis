@@ -202,3 +202,54 @@ ANY_MENTIONS = _AnyMentions()
 def test_member_channel_prefs_only_narrow_readable_channels(prefs, expected):
     # Channel 9 is not readable by the member: picking it never adds it.
     assert apply_channel_prefs(["1", "2", "3"], prefs) == expected
+
+
+def test_admin_can_turn_member_commands_off_but_members_can_still_forget_keys():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from gnosis.collectors import gnosis_commands as gc
+    from gnosis.config import Settings
+    from gnosis.i18n import message
+
+    class Tree:
+        def add_command(self, group):
+            self.group = group
+
+    client = SimpleNamespace(tree=Tree())
+    db = Mock()
+    db.workspace_for_external_id.return_value = {"id": 7, "member_commands_enabled": False}
+    db.delete_user_llm_key.return_value = True
+    gc.register(client, Settings(secret_key="s"), db, lambda interaction: ["10"])
+    group = client.tree.group
+
+    def interaction():
+        return SimpleNamespace(
+            guild=SimpleNamespace(id=1),
+            guild_id=1,
+            locale="it",
+            user=SimpleNamespace(id=42),
+            response=SimpleNamespace(
+                is_done=lambda: False, send_message=AsyncMock(), send_modal=AsyncMock()
+            ),
+        )
+
+    mode = SimpleNamespace(value="only")
+    for name, args in (
+        ("resume", (None, None)),
+        ("create", ()),
+        ("key", ()),
+        ("channels", (mode,)),
+    ):
+        current = interaction()
+        asyncio.run(group.get_command(name).callback(current, *args))
+        current.response.send_message.assert_awaited_once_with(
+            message("member_commands_disabled", "it"), ephemeral=True
+        )
+        current.response.send_modal.assert_not_awaited()
+    db.user_llm_key.assert_not_called()
+    db.set_member_channel_prefs.assert_not_called()
+
+    current = interaction()
+    asyncio.run(group.get_command("forget").callback(current))
+    db.delete_user_llm_key.assert_called_once_with("42")
