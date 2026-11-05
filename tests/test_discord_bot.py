@@ -257,7 +257,10 @@ def test_real_command_tree_serializes_localizations_offline(monkeypatch):
     sync.assert_awaited_once()
     assert set(payloads) == {"ask", "digest", "help", "gnosis"}
     subcommands = {option["name"]: option for option in payloads["gnosis"]["options"]}
-    assert set(subcommands) == {"create", "key", "forget", "resume"}
+    assert set(subcommands) == {"create", "key", "forget", "resume", "channels"}
+    mode = subcommands["channels"]["options"][0]
+    assert [choice["value"] for choice in mode["choices"]] == ["only", "exclude", "all"]
+    assert mode["choices"][0]["name_localizations"]["it"] == message("mode_only", "it")
     for locale in ("it", "es-ES", "ru", "zh-CN"):
         assert payloads["gnosis"]["description_localizations"][locale] == message(
             "gnosis_description", locale

@@ -7,6 +7,7 @@ import pytest
 
 from gnosis import secretbox
 from gnosis.collectors.gnosis_commands import (
+    apply_channel_prefs,
     build_resume,
     parse_period,
     validate_key_input,
@@ -113,6 +114,7 @@ def test_resume_from_any_channel_creates_private_channel_and_posts_there(monkeyp
     db = Mock()
     db.workspace_for_external_id.return_value = {"id": 7}
     db.private_channel.return_value = None
+    db.member_channel_prefs.return_value = None
     db.user_llm_key.return_value = {
         "api_key_encrypted": secretbox.encrypt("s", "sk-member"),
         "base_url": "",
@@ -187,3 +189,16 @@ class _AnyMentions:
 
 
 ANY_MENTIONS = _AnyMentions()
+
+
+@pytest.mark.parametrize(
+    ("prefs", "expected"),
+    [
+        (None, ["1", "2", "3"]),
+        ({"mode": "only", "channel_ids": ["2", "9"]}, ["2"]),
+        ({"mode": "exclude", "channel_ids": ["2"]}, ["1", "3"]),
+    ],
+)
+def test_member_channel_prefs_only_narrow_readable_channels(prefs, expected):
+    # Channel 9 is not readable by the member: picking it never adds it.
+    assert apply_channel_prefs(["1", "2", "3"], prefs) == expected

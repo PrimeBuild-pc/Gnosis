@@ -237,7 +237,7 @@ automatically; there are no IDs to copy.
    - keep **Read every channel Gnosis can see** on, and tick any channel to exclude;
    - choose the digest channel or click **Create #gnosis-digest** (read-only for members);
    - choose the frequency (weekly on Monday, daily, or off) and the digest language.
-5. **Tell members** to run `/gnosis create` in any channel.
+5. **Tell members** to run `/gnosis key` once, then `/gnosis resume` in any channel.
 
 That is all. On first start the worker reads the latest 200 messages of every readable
 channel, then follows new messages, edits and deletions live.
@@ -248,9 +248,10 @@ channel, then follows new messages, edits and deletions live.
 | --- | --- |
 | `/gnosis create` | Creates a private channel (only the member and the bot can see it) with instructions. |
 | `/gnosis key` | Opens a private form for the member's own OpenAI-compatible API key, optional base URL (for example `https://api.deepseek.com`) and model. The key is encrypted at rest. |
-| `/gnosis resume` | In the private channel: summarizes the server since Gnosis was added. |
+| `/gnosis resume` | From any channel: summarizes the server since Gnosis was added and posts it in the member's private channel (created on first use). |
 | `/gnosis resume start:01/10/2026 end:31/10/2026` | Same, for a period (DD/MM/YYYY, end date included). |
 | `/gnosis forget` | Deletes the member's saved key. |
+| `/gnosis channels` | Narrows the member's summaries: only the picked channels, all except the picked ones, or all again. It can never add a channel the member cannot read or an administrator excluded. |
 | `/ask`, `/digest`, `/help` | Questions with citations and the latest digest, limited to roles allowed in the dashboard. |
 
 Command descriptions and replies follow the member's Discord language (English, Italian,
