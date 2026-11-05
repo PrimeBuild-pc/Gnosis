@@ -122,3 +122,17 @@ def test_workspace_server_mode_fields_are_validated():
     ):
         with pytest.raises(ValidationError):
             WorkspaceInput(name="S", **bad)
+
+
+def test_invite_link_has_exact_permissions_and_no_administrator():
+    from urllib.parse import parse_qs, urlparse
+
+    from gnosis.api import invite_url
+
+    query = parse_qs(urlparse(invite_url("123")).query)
+    permissions = int(query["permissions"][0])
+    assert query["client_id"] == ["123"]
+    assert query["scope"] == ["bot applications.commands"]
+    assert permissions & (1 << 3) == 0  # Administrator
+    expected = {4: "Manage Channels", 10: "View", 11: "Send", 14: "Embed", 16: "History"}
+    assert permissions == sum(1 << bit for bit in expected)

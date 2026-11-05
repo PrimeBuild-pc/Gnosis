@@ -196,7 +196,9 @@ class Database:
                 )
             return workspace_id
 
-    def ensure_auto_source(self, guild_id: str, channel_id: str, name: str) -> int | None:
+    def ensure_auto_source(
+        self, guild_id: str, channel_id: str, name: str, public: bool = False
+    ) -> int | None:
         """Register a channel collected by "read all". None when the server does not read
         all channels, the channel is excluded, or it is a private /gnosis channel."""
         with self.connection() as connection:
@@ -215,17 +217,46 @@ class Database:
                 return None
             row = connection.execute(
                 """
-                INSERT INTO sources (platform, external_id, name, enabled, workspace_id, auto)
-                VALUES ('discord', %s, %s, true, %s, true)
+                INSERT INTO sources
+                    (platform, external_id, name, enabled, workspace_id, auto, public)
+                VALUES ('discord', %s, %s, true, %s, true, %s)
                 ON CONFLICT (platform, external_id) DO UPDATE SET
                     name = CASE WHEN sources.auto THEN EXCLUDED.name ELSE sources.name END,
+                    public = EXCLUDED.public,
                     enabled = CASE WHEN sources.auto THEN true ELSE sources.enabled END,
                     updated_at = now()
                 RETURNING id, enabled
                 """,
-                (channel_id, name, workspace["id"]),
+                (channel_id, name, workspace["id"], public),
             ).fetchone()
             return row["id"] if row["enabled"] else None
+
+    def ensure_discord_workspace(self, guild_id: str, guild_name: str) -> int:
+        """Create the workspace for a server the bot joined, so no manual mapping is needed."""
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT id FROM workspaces WHERE platform = 'discord' AND external_id = %s",
+                (guild_id,),
+            ).fetchone()
+            if row:
+                return row["id"]
+            taken = connection.execute(
+                "SELECT 1 FROM workspaces WHERE name = %s", (guild_name,)
+            ).fetchone()
+            name = f"{guild_name} ({guild_id})" if taken else guild_name
+            row = connection.execute(
+                """
+                INSERT INTO workspaces (name, platform, external_id) VALUES (%s, 'discord', %s)
+                ON CONFLICT DO NOTHING RETURNING id
+                """,
+                (name[:100], guild_id),
+            ).fetchone()
+            if row:
+                return row["id"]
+            return connection.execute(
+                "SELECT id FROM workspaces WHERE platform = 'discord' AND external_id = %s",
+                (guild_id,),
+            ).fetchone()["id"]
 
     def private_channel(self, guild_id: str, user_id: str) -> str | None:
         with self.connection() as connection:
@@ -542,6 +573,7 @@ class Database:
                     FROM messages m JOIN sources s ON s.id = m.source_id
                     LEFT JOIN workspaces w ON w.id = s.workspace_id
                     WHERE s.enabled AND m.status = 'processed'
+                      AND (NOT s.auto OR s.public)
                       AND m.sent_at >= %s AND m.sent_at < %s
                       AND (%s::bigint IS NULL OR s.workspace_id = %s)
                       AND (%s::bigint IS NULL OR w.platform IS DISTINCT FROM 'discord'

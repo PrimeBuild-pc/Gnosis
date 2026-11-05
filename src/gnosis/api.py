@@ -214,6 +214,18 @@ class WorkspaceInput(BaseModel):
         return values
 
 
+# View Channels, Send Messages, Embed Links, Read Message History, Manage Channels.
+INVITE_PERMISSIONS = (1 << 10) | (1 << 11) | (1 << 14) | (1 << 16) | (1 << 4)
+
+
+def invite_url(application_id: str) -> str:
+    return (
+        "https://discord.com/oauth2/authorize"
+        f"?client_id={application_id}&scope=bot+applications.commands"
+        f"&permissions={INVITE_PERMISSIONS}"
+    )
+
+
 class RetentionUpdate(BaseModel):
     days: int | None = Field(default=None, ge=1)
 
@@ -366,6 +378,19 @@ def create_app() -> FastAPI:
             digest_locale=payload.digest_locale,
         )
         return {"workspaces": public_workspaces(request.app.state.db)}
+
+    @app.get("/api/discord/invite", dependencies=[Depends(authenticate)])
+    def discord_invite():
+        """Invite link with exactly the permissions Gnosis needs (no Administrator)."""
+        if not settings.discord_bot_token:
+            raise HTTPException(status_code=400, detail="Discord bot token required")
+        with httpx.Client(timeout=10) as client:
+            response = client.get(
+                "https://discord.com/api/v10/oauth2/applications/@me",
+                headers={"Authorization": f"Bot {settings.discord_bot_token}"},
+            )
+        response.raise_for_status()
+        return {"url": invite_url(response.json()["id"])}
 
     @app.post("/api/workspaces/{workspace_id}/digest-channel", dependencies=[Depends(authenticate)])
     def create_digest_channel(workspace_id: int, request: Request):
