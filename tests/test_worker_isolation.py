@@ -28,6 +28,7 @@ def test_scheduler_never_adds_a_mixed_digest_to_scoped_workspaces(
     db.list_workspaces.return_value = workspaces
     db.digest_exists.return_value = False
     db.has_unprocessed_before.return_value = backlog
+    db.last_digest_end.return_value = None
     monkeypatch.setattr(worker, "Database", lambda url: db)
     monkeypatch.setattr(worker, "LLM", Mock())
     generate = AsyncMock(return_value=None)

@@ -245,6 +245,11 @@ def register(
         except ValueError:
             await reply(interaction, "bad_date")
             return
+        # Without dates: only what is new since this member's previous summary.
+        undated = not start and not end
+        since = db.member_last_resume(guild_id, user_id) if undated else None
+        if since:
+            first = since
         channels = apply_channel_prefs(
             readable_channels(interaction), db.member_channel_prefs(guild_id, user_id)
         )
@@ -253,13 +258,18 @@ def register(
             workspace["id"], guild_id, channels, first, last, RESUME_LIMIT
         )
         if not rows:
-            await reply(interaction, "no_messages")
+            await reply(interaction, "no_new_messages" if since else "no_messages")
             return
         # Usable from any channel: the summary always goes to the member's private channel.
         channel, _ = await private_channel_for(interaction)
         if channel is None:
             return
-        period = f"{start or message('resume_all_time', locale)} → {end or '…'}"
+        if since:
+            period = message("resume_since_last", locale).format(
+                date=since.astimezone(settings.zoneinfo).strftime("%d/%m/%Y %H:%M")
+            )
+        else:
+            period = f"{start or message('resume_all_time', locale)} → {end or '…'}"
         await reply(interaction, "resume_working", count=str(len(rows)), channel=channel.mention)
         try:
             chunks = await build_resume(
@@ -271,6 +281,8 @@ def register(
             )
             for chunk in chunks:
                 await channel.send(chunk, allowed_mentions=discord.AllowedMentions.none())
+            if undated:
+                db.set_member_last_resume(guild_id, user_id, rows[-1]["sent_at"])
         except Exception:
             log.exception("Discord: /gnosis resume failed")
             await channel.send(message("resume_error", locale))

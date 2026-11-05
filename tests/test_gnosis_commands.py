@@ -253,3 +253,95 @@ def test_admin_can_turn_member_commands_off_but_members_can_still_forget_keys():
     current = interaction()
     asyncio.run(group.get_command("forget").callback(current))
     db.delete_user_llm_key.assert_called_once_with("42")
+
+
+def test_pipeline_without_ai_never_calls_the_chat_model():
+    from unittest.mock import Mock
+
+    from gnosis.pipeline import Pipeline
+
+    db = Mock()
+    db.ai_processing_enabled.return_value = False
+    db.pending_messages.return_value = [{"id": 1, "text": "hello world"}, {"id": 2, "text": "  "}]
+    llm = Mock(json=AsyncMock(), embed=AsyncMock(side_effect=lambda chunks: [[0.0]] * len(chunks)))
+    assert asyncio.run(Pipeline(db, llm).process_pending()) == 2
+    llm.json.assert_not_awaited()
+    db.finish_message.assert_any_call(1, 1.0, [], "discussion", [("hello world", [0.0])])
+    db.finish_message.assert_any_call(2, 1.0, [], "discussion", [])
+
+
+def _resume_harness(since, rows):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from gnosis.collectors import gnosis_commands as gc
+    from gnosis.config import Settings
+
+    class Tree:
+        def add_command(self, group):
+            self.group = group
+
+    client = SimpleNamespace(tree=Tree())
+    db = Mock()
+    db.workspace_for_external_id.return_value = {"id": 7}
+    db.private_channel.return_value = "555"
+    db.member_channel_prefs.return_value = None
+    db.member_last_resume.return_value = since
+    db.user_llm_key.return_value = {
+        "api_key_encrypted": secretbox.encrypt("s", "sk"),
+        "base_url": "",
+        "model": "",
+    }
+    db.messages_for_member.return_value = rows
+    private = SimpleNamespace(id=555, mention="<#555>", send=AsyncMock())
+    guild = SimpleNamespace(id=1, get_channel=lambda channel_id: private)
+    interaction = SimpleNamespace(
+        guild=guild,
+        guild_id=1,
+        channel_id=10,
+        locale="en",
+        user=SimpleNamespace(id=42),
+        response=SimpleNamespace(is_done=lambda: False, send_message=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock()),
+    )
+    gc.register(client, Settings(secret_key="s", timezone="Europe/Rome"), db, lambda i: ["10"])
+    return client.tree.group.get_command("resume").callback, interaction, db, private
+
+
+def test_undated_resume_covers_only_what_is_new_and_moves_the_marker(monkeypatch):
+    from gnosis.collectors import gnosis_commands as gc
+
+    monkeypatch.setattr(gc, "user_text_fn", lambda *args: AsyncMock())
+    monkeypatch.setattr(gc, "build_resume", AsyncMock(return_value=["summary"]))
+    since = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
+    newest = datetime(2026, 11, 4, 18, 30, tzinfo=UTC)
+    rows = [{"id": 1, "sent_at": since}, {"id": 2, "sent_at": newest}]
+    resume, interaction, db, private = _resume_harness(since, rows)
+    asyncio.run(resume(interaction, None, None))
+    assert db.messages_for_member.call_args.args[3] == since  # start = previous summary end
+    db.set_member_last_resume.assert_called_once_with("1", "42", newest)
+    assert "new since 01/11/2026 10:00" in gc.build_resume.await_args.args[3]
+    private.send.assert_any_await("summary", allowed_mentions=ANY_MENTIONS)
+
+
+def test_dated_resume_ignores_and_keeps_the_marker(monkeypatch):
+    from gnosis.collectors import gnosis_commands as gc
+
+    monkeypatch.setattr(gc, "user_text_fn", lambda *args: AsyncMock())
+    monkeypatch.setattr(gc, "build_resume", AsyncMock(return_value=["summary"]))
+    rows = [{"id": 1, "sent_at": datetime(2026, 10, 5, tzinfo=UTC)}]
+    resume, interaction, db, _ = _resume_harness(datetime(2026, 11, 1, tzinfo=UTC), rows)
+    asyncio.run(resume(interaction, "01/10/2026", "31/10/2026"))
+    db.member_last_resume.assert_not_called()
+    db.set_member_last_resume.assert_not_called()
+
+
+def test_undated_resume_with_nothing_new_says_so():
+    from gnosis.i18n import message
+
+    resume, interaction, _, private = _resume_harness(datetime(2026, 11, 1, tzinfo=UTC), [])
+    asyncio.run(resume(interaction, None, None))
+    interaction.response.send_message.assert_awaited_once_with(
+        message("no_new_messages", "en"), ephemeral=True
+    )
+    private.send.assert_not_awaited()

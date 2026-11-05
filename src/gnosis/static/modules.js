@@ -574,6 +574,25 @@ const renderSettings = async container => {
     } catch (error) { showError(addResult, error); }
   });
 
+  // --- automatic AI usage ---
+  const aiCard = card('ai.title', 'ai.intro');
+  container.append(aiCard);
+  const aiToggle = el('input', {type: 'checkbox', id: 'ai-processing'});
+  const aiRow = el('label', {className: 'checkbox-row'});
+  aiRow.append(aiToggle, el('span', {text: () => t('ai.toggle')}));
+  const aiResult = el('p', {className: 'hint'});
+  aiCard.append(aiRow, el('p', {className: 'hint', text: () => t('ai.digestNote')}), aiResult);
+  request('/api/settings/ai-processing').then(data => { aiToggle.checked = data.enabled; })
+    .catch(error => showError(aiResult, error));
+  aiToggle.addEventListener('change', async () => {
+    try {
+      await request('/api/settings/ai-processing', {
+        method: 'POST', body: JSON.stringify({enabled: aiToggle.checked}),
+      });
+      setText(aiResult, () => t('settings.savedLive'));
+    } catch (error) { showError(aiResult, error); }
+  });
+
   // --- retention ---
   const retention = card('retention.title');
   container.append(retention);
