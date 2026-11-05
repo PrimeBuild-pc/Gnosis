@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable, Iterable
 from typing import Any
 
@@ -12,6 +13,7 @@ from ..db import Database
 from ..i18n import message, normalize_locale
 from ..rag import RAG, cited_message_ids
 from ..types import CollectedMessage
+from .gnosis_commands import register as register_gnosis
 
 Emit = Callable[[CollectedMessage], int | None]
 Delete = Callable[[str, str, str], None]
@@ -19,6 +21,8 @@ Delete = Callable[[str, str, str], None]
 log = logging.getLogger(__name__)
 
 _MAX_REPLY = 2000
+# How long a read-all decision per channel is reused before asking the database again.
+_AUTO_TTL = 300
 
 
 class CommandTranslator(discord.app_commands.Translator):
@@ -79,6 +83,20 @@ async def run(
     intents = discord.Intents.default()
     intents.message_content = True
 
+    auto_cache: dict[int, tuple[float, bool]] = {}
+
+    def auto_allowed(channel: Any) -> bool:
+        """Channels collected because their server reads all channels (cached briefly)."""
+        guild = getattr(channel, "guild", None)
+        if guild is None:
+            return False
+        cached = auto_cache.get(channel.id)
+        if cached and time.monotonic() - cached[0] < _AUTO_TTL:
+            return cached[1]
+        ok = db.ensure_auto_source(str(guild.id), str(channel.id), f"#{channel.name}") is not None
+        auto_cache[channel.id] = (time.monotonic(), ok)
+        return ok
+
     class Client(discord.Client):
         backfilled = False
 
@@ -91,12 +109,19 @@ async def run(
             await self.tree.sync()
 
         async def collect(self, message: discord.Message) -> None:
-            if message.channel.id not in allowed or not message.content:
+            if not message.content or message.author.id == getattr(self.user, "id", None):
                 return
+            source_channel = message.channel
+            if source_channel.id not in allowed:
+                # Read-all servers file thread messages under their parent channel, so
+                # the channel permission check for summaries covers them too.
+                source_channel = getattr(source_channel, "parent", None) or source_channel
+                if source_channel.id not in allowed and not auto_allowed(source_channel):
+                    return
             emit(
                 CollectedMessage(
                     platform="discord",
-                    source_external_id=str(message.channel.id),
+                    source_external_id=str(source_channel.id),
                     external_id=str(message.id),
                     author=str(message.author),
                     author_id=str(message.author.id),
@@ -146,6 +171,21 @@ async def run(
                 if isinstance(channel, (discord.TextChannel, discord.Thread)):
                     async for message in channel.history(limit=backfill_limit):
                         await self.collect(message)
+            # Read-all servers: catch up on history the bot can read.
+            for guild in self.guilds:
+                for channel in guild.text_channels:
+                    permissions = channel.permissions_for(guild.me)
+                    if (
+                        channel.id in allowed
+                        or not (permissions.view_channel and permissions.read_message_history)
+                        or not auto_allowed(channel)
+                    ):
+                        continue
+                    try:
+                        async for message in channel.history(limit=backfill_limit):
+                            await self.collect(message)
+                    except discord.HTTPException:
+                        log.warning("Discord: history unavailable for channel %s", channel.id)
 
         async def on_message(self, message: discord.Message) -> None:
             await self.collect(message)
@@ -154,8 +194,11 @@ async def run(
             await self.collect(after)
 
         async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
-            if payload.channel_id in allowed:
-                delete("discord", str(payload.channel_id), str(payload.message_id))
+            channel = self.get_channel(payload.channel_id)
+            parent = getattr(channel, "parent", None)
+            for channel_id in {payload.channel_id, parent.id if parent else None} - {None}:
+                if channel_id in allowed or auto_cache.get(channel_id, (0, False))[1]:
+                    delete("discord", str(channel_id), str(payload.message_id))
 
     client = Client(intents=intents, allowed_mentions=discord.AllowedMentions.none())
 
@@ -250,4 +293,5 @@ async def run(
             message("help", str(getattr(interaction, "locale", "en"))), ephemeral=True
         )
 
+    register_gnosis(client, settings, db, readable_channels)
     await client.start(settings.discord_bot_token)

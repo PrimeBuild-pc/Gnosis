@@ -168,6 +168,27 @@ class WorkspaceInput(BaseModel):
     allowed_role_ids: list[str] | None = None
     digest_webhook: str | None = None
     digest_telegram_chat_id: str | None = None
+    read_all_channels: bool | None = None
+    excluded_channel_ids: list[str] | None = Field(default=None, max_length=1000)
+    digest_channel_id: str | None = None
+    digest_frequency: Literal["off", "daily", "weekly"] | None = None
+    digest_locale: Literal["en", "it", "es", "ru", "zh"] | None = None
+
+    @field_validator("excluded_channel_ids")
+    @classmethod
+    def numeric_channels(cls, values: list[str] | None) -> list[str] | None:
+        if values is not None and any(
+            not value.isascii() or not value.isdigit() or int(value) <= 0 for value in values
+        ):
+            raise ValueError("Invalid channel ID")
+        return values
+
+    @field_validator("digest_channel_id")
+    @classmethod
+    def numeric_digest_channel(cls, value: str | None) -> str | None:
+        if value and (not value.isascii() or not value.isdigit()):
+            raise ValueError("Invalid channel ID")
+        return value
 
     @field_validator("name")
     @classmethod
@@ -338,8 +359,54 @@ def create_app() -> FastAPI:
             allowed_role_ids=payload.allowed_role_ids,
             digest_webhook=payload.digest_webhook,
             digest_telegram_chat_id=payload.digest_telegram_chat_id,
+            read_all_channels=payload.read_all_channels,
+            excluded_channel_ids=payload.excluded_channel_ids,
+            digest_channel_id=payload.digest_channel_id,
+            digest_frequency=payload.digest_frequency,
+            digest_locale=payload.digest_locale,
         )
         return {"workspaces": public_workspaces(request.app.state.db)}
+
+    @app.post("/api/workspaces/{workspace_id}/digest-channel", dependencies=[Depends(authenticate)])
+    def create_digest_channel(workspace_id: int, request: Request):
+        """Have the bot create a read-only #gnosis-digest channel and use it for digests."""
+        db = request.app.state.db
+        workspace = next((w for w in db.list_workspaces() if w["id"] == workspace_id), None)
+        if workspace is None or workspace.get("platform") != "discord":
+            raise HTTPException(status_code=404, detail="Discord workspace not found")
+        guild_id = workspace.get("external_id") or ""
+        if not guild_id.isdigit() or not settings.discord_bot_token:
+            raise HTTPException(status_code=400, detail="Server ID and bot token required")
+        headers = {"Authorization": f"Bot {settings.discord_bot_token}"}
+        api = "https://discord.com/api/v10"
+        with httpx.Client(timeout=10) as client:
+            bot = client.get(f"{api}/users/@me", headers=headers)
+            bot.raise_for_status()
+            view, send, embed = 1 << 10, 1 << 11, 1 << 14
+            created = client.post(
+                f"{api}/guilds/{guild_id}/channels",
+                headers=headers,
+                json={
+                    "name": "gnosis-digest",
+                    "type": 0,
+                    "topic": "Gnosis digests",
+                    "permission_overwrites": [
+                        {"id": guild_id, "type": 0, "allow": str(view), "deny": str(send)},
+                        {
+                            "id": bot.json()["id"],
+                            "type": 1,
+                            "allow": str(view | send | embed),
+                            "deny": "0",
+                        },
+                    ],
+                },
+            )
+        if created.status_code == 403:
+            raise HTTPException(status_code=403, detail="The bot needs Manage Channels")
+        created.raise_for_status()
+        channel = created.json()
+        db.upsert_workspace(name=workspace["name"], digest_channel_id=channel["id"])
+        return {"channel_id": channel["id"], "workspaces": public_workspaces(db)}
 
     @app.delete("/api/workspaces/{workspace_id}", dependencies=[Depends(authenticate)])
     def delete_workspace(workspace_id: int, request: Request):

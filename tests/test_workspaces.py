@@ -98,3 +98,27 @@ def test_bots_env_parsing():
     # Entries without an address are ignored instead of producing a bot with an empty URL.
     assert _parse_bots("doorman=,=http://x,") == ()
     assert _parse_bots("") == ()
+
+
+def test_workspace_server_mode_fields_are_validated():
+    from pydantic import ValidationError
+
+    from gnosis.api import WorkspaceInput
+
+    ok = WorkspaceInput(
+        name="S",
+        read_all_channels=True,
+        excluded_channel_ids=["123"],
+        digest_channel_id="456",
+        digest_frequency="daily",
+        digest_locale="it",
+    )
+    assert ok.digest_frequency == "daily" and ok.excluded_channel_ids == ["123"]
+    for bad in (
+        {"excluded_channel_ids": ["abc"]},
+        {"digest_channel_id": "1; DROP"},
+        {"digest_frequency": "hourly"},
+        {"digest_locale": "fr"},
+    ):
+        with pytest.raises(ValidationError):
+            WorkspaceInput(name="S", **bad)
