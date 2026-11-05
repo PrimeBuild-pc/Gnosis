@@ -93,7 +93,11 @@ async def run(
         cached = auto_cache.get(channel.id)
         if cached and time.monotonic() - cached[0] < _AUTO_TTL:
             return cached[1]
-        ok = db.ensure_auto_source(str(guild.id), str(channel.id), f"#{channel.name}") is not None
+        public = channel.permissions_for(guild.default_role).view_channel
+        source_id = db.ensure_auto_source(
+            str(guild.id), str(channel.id), f"#{channel.name}", public
+        )
+        ok = source_id is not None
         auto_cache[channel.id] = (time.monotonic(), ok)
         return ok
 
@@ -165,6 +169,8 @@ async def run(
             if self.backfilled:
                 return
             self.backfilled = True
+            for guild in self.guilds:
+                db.ensure_discord_workspace(str(guild.id), guild.name)
             self.loop.create_task(self.refresh_available_loop())
             for channel_id in allowed:
                 channel = self.get_channel(channel_id)
@@ -186,6 +192,11 @@ async def run(
                             await self.collect(message)
                     except discord.HTTPException:
                         log.warning("Discord: history unavailable for channel %s", channel.id)
+
+        async def on_guild_join(self, guild: discord.Guild) -> None:
+            # Ready to use as soon as an admin invites the bot: no manual workspace step.
+            db.ensure_discord_workspace(str(guild.id), guild.name)
+            self.publish_available()
 
         async def on_message(self, message: discord.Message) -> None:
             await self.collect(message)

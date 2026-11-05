@@ -164,7 +164,16 @@ const renderPlatform = platform => async container => {
   const sourcesCard = card('platform.sources', `platform.sources.${platform}`);
   const serverCard = card('platform.serverSettings');
   container.append(credentials);
-  if (platform === 'discord') container.append(serverCard);
+  if (platform === 'discord') {
+    const invite = el('a', {className: 'button primary', text: () => t('platform.invite')});
+    invite.target = '_blank';
+    invite.rel = 'noopener noreferrer';
+    invite.hidden = true;
+    credentials.append(el('p', {className: 'hint', text: () => t('platform.inviteHint')}), invite);
+    request('/api/discord/invite').then(({url}) => { invite.href = url; invite.hidden = false; })
+      .catch(() => {});
+    container.append(serverCard);
+  }
   container.append(sourcesCard);
 
   // --- platform credentials ---

@@ -1,19 +1,18 @@
 # Platform setup
 
 For installation, file permissions, networking, costs, and the full Discord procedure, read the
-[README](../README.md#discord-step-by-step-setup-including-multiple-servers).
+[README](../README.md#discord-setup-in-five-steps).
 Credentials and sessions must be entered by the operator, never in agent transcripts.
 Collection requires consent and an explicit allowlist; discovering a channel does not authorize reading it.
 
 ## Discord
 
-Use only an official bot. Developer Portal → Bot → **Message Content Intent**.
-Invite with `bot` and `applications.commands` scopes; grant View Channel, Read Message History,
-and Send Messages in the required channels, not Administrator. For each server, create a workspace
-with the server ID and roles; missing mappings or empty roles make `/ask` and `/digest` deny access.
-`GNOSIS_DISCORD_ALLOWED_ROLE_IDS` is deprecated, not an authorization fallback.
+Follow [Discord: setup in five steps](../README.md#discord-setup-in-five-steps): create the bot
+with **Message Content Intent**, save the token and an AI key, invite it with the dashboard
+button, then choose exclusions, digest channel, frequency and language per server. Servers are
+registered automatically when the bot joins them.
 
-Sources must be text channels assigned to the correct workspace in `sources.toml` or the dashboard:
+Hand-picked channels remain available when **Read every channel** is off:
 
 ```toml
 [[discord]]
@@ -23,18 +22,8 @@ workspace = "Server A"
 topics = ["Linux", "backup"]
 ```
 
-The workspace name must match the one configured for the server ID. For multiple servers,
-repeat with distinct names and IDs. The bot replies privately and restricts `/ask` to channels
-the member can read in the current server; threads/forums are not part of this path.
-
-### Automatic digests
-
-Create the webhook in Channel Settings → Integrations and save it in the **workspace**, not a
-global URL list. Choose a channel whose audience is authorized for every source in the workspace.
-Automatic digests do not apply per-recipient filters, and command roles do not control who can
-read the webhook channel. Without a webhook, nothing is published. If workspaces exist, no mixed
-global digest is published. The dashboard masks webhooks; an empty field preserves the value,
-while API `digest_webhook: ""` revokes it.
+`/ask` and `/digest` still require roles allowed for the server in the dashboard; `/gnosis`
+commands are open to every member and use each member's own key.
 
 ## Telegram
 

@@ -42,8 +42,9 @@ Python 3.11+, FastAPI, vanilla JavaScript, Docker Compose. In development, MIT l
   the entire installation: the workspace selector is a filter, **not** an authorization boundary
   between web users. This is not a public multi-tenant SaaS. For administrators who must not see
   each other's data, use separate installations, databases, credentials, and volumes.
-- The same Discord bot can serve multiple servers. Commands require a workspace explicitly
-  mapped to the server ID and its roles; missing mappings or empty roles deny access.
+- The same Discord bot can serve multiple servers; each server is registered when the bot
+  joins it. `/gnosis` commands are open to members and use each member's own AI key;
+  `/ask` and `/digest` also require roles allowed for that server in the dashboard.
   `/ask` uses only messages from the server, workspace, and channels the member can read.
   Replies are private (ephemeral), without automatic mentions. `/digest` checks all stored
   input messages against current permissions, not just citations; digests predating
@@ -212,66 +213,68 @@ firewall. Do not publish port 8080 directly. The proxy must preserve the correct
 for same-origin checks; accept forwarded headers only from trusted proxies. There is no built-in
 brute-force protection: do not treat this dashboard as a public service.
 
-## Discord: step-by-step setup, including multiple servers
+## Discord: setup in five steps
 
-1. Obtain consent from server administrators and content owners.
-2. Open <https://discord.com/developers/applications>, **New Application**, then **Bot**.
-   Copy/reset the bot token and enter it in `DISCORD_BOT_TOKEN` on the dashboard's Discord
-   page (or in `.env`). It is a credential: user tokens/self-bots are not supported.
-3. Under **Bot → Privileged Gateway Intents**, enable **Message Content Intent**. This
-   implementation does not require Presence or Server Members Intent. If Discord requires
-   intent approval for your bot, complete that process before starting it.
-4. In **OAuth2 → URL Generator**, select `bot` and `applications.commands`. Minimum permissions
-   in authorized channels: **View Channels**, **Read Message History**, **Send Messages**
-   for replies. Do not grant **Administrator**, server/role management, or member kicks.
-   Open the link, choose the server, and approve. Repeat for each authorized server.
-5. After saving credentials, recreate the processes (a simple `restart` does not reread `.env`):
+One bot, any number of servers. Every server you invite Gnosis to is registered
+automatically; there are no IDs to copy.
+
+1. **Create the bot.** <https://discord.com/developers/applications> → **New Application** →
+   **Bot**: reset/copy the token and turn on **Message Content Intent** (Presence and Server
+   Members intents are not needed).
+2. **Save the token** in the dashboard **Discord → Credentials** (`DISCORD_BOT_TOKEN`) together
+   with an AI provider key (`GNOSIS_CHAT_API_KEY`, optional `GNOSIS_CHAT_BASE_URL` and
+   `OPENAI_CHAT_MODEL`), then recreate the processes so they read the new `.env`:
 
    ```bash
    docker compose up -d --force-recreate web worker
    ```
 
-6. Enable Discord **User Settings → Advanced → Developer Mode**. Copy the **server** ID and
-   authorized **role** IDs (not user IDs or role names).
-7. In dashboard **Settings → Workspaces**, create a uniquely named workspace with the server
-   ID. Select it at the top; on the **Discord** page, save comma-separated role IDs.
-   A workspace without roles denies all commands. The old global variable
-   `GNOSIS_DISCORD_ALLOWED_ROLE_IDS` is deprecated and no longer grants access.
-8. On **Discord → Sources**, select only the channels to read from the dropdown.
-   Use exactly the workspace name you created, even if it differs from the server name
-   suggested by the dropdown. Discovered channels are not automatically authorized for collection.
-   Specify concrete topics (for example `Linux, backup, homelab`) for the relevance filter.
-9. After allowlist changes:
+3. **Invite the bot.** Click **Invite Gnosis to a server** on the dashboard Discord page. The
+   link asks only for View Channels, Read Message History, Send Messages, Embed Links and
+   Manage Channels (for private member channels and the digest channel), never Administrator.
+   The person inviting must own the server or have Manage Server.
+4. **Pick the server** in the dashboard selector, then under **Reading and digest**:
+   - keep **Read every channel Gnosis can see** on, and tick any channel to exclude;
+   - choose the digest channel or click **Create #gnosis-digest** (read-only for members);
+   - choose the frequency (weekly on Monday, daily, or off) and the digest language.
+5. **Tell members** to run `/gnosis create` in any channel.
 
-   ```bash
-   docker compose restart worker
-   ```
+That is all. On first start the worker reads the latest 200 messages of every readable
+channel, then follows new messages, edits and deletions live.
 
-10. Test `/ask` with a member who has the role, then without the role. Test in the second server:
-    no source from the first server should appear. An unmapped server denies access even if
-    the bot has been invited. Discord DM commands cannot access the knowledge base.
+### What members can do
 
-Global command synchronization may take time. The collector reads the latest 200 accessible
-messages at startup, then live events/edits/deletions. Sources must be text channels:
-threads/forums are not included in the `/ask` authorization flow. Permissions are read from
-the event-updated Discord cache, not a REST request for each command. Historical messages
-without a verifiable `guild_id` are excluded from commands.
+| Command | What it does |
+| --- | --- |
+| `/gnosis create` | Creates a private channel (only the member and the bot can see it) with instructions. |
+| `/gnosis key` | Opens a private form for the member's own OpenAI-compatible API key, optional base URL (for example `https://api.deepseek.com`) and model. The key is encrypted at rest. |
+| `/gnosis resume` | In the private channel: summarizes the server since Gnosis was added. |
+| `/gnosis resume start:01/10/2026 end:31/10/2026` | Same, for a period (DD/MM/YYYY, end date included). |
+| `/gnosis forget` | Deletes the member's saved key. |
+| `/ask`, `/digest`, `/help` | Questions with citations and the latest digest, limited to roles allowed in the dashboard. |
 
-### Digests and restricted channels
+Command descriptions and replies follow the member's Discord language (English, Italian,
+Spanish, Russian, Chinese).
 
-Automatic digests are **per workspace**, not per member. A webhook publishes the entire digest
-to its destination: `/ask` roles do not protect a webhook. Choose a destination channel whose
-audience is authorized for **all** sources in the workspace; otherwise leave the webhook empty.
-Do not mix servers within workspaces. An admin can deliberately configure cross-platform sources:
-this does not give Discord members permission to read them. Digests for Discord workspaces
-include only messages with a verifiable guild matching the mapping.
+### Privacy rules built in
 
-Create the webhook in **Channel Settings → Integrations → Webhooks**, and save it in the workspace.
-The dashboard shows only a masked indicator; an empty field preserves the value. To revoke it,
-the owner can send `digest_webhook: ""` to the authenticated API or revoke it in Discord.
-Workspaces without a destination do not use the global webhook. When workspaces exist, the worker
-does not create or publish a global digest; manual global generation stays archived without a push.
-Configuring the wrong destination remains the operator's responsibility.
+- `/gnosis resume` only uses channels the member can read right now, and only the member's own
+  key: summaries never cost the server owner anything. At most the 2,000 most recent
+  messages are summarized; the reply says so when the limit applies.
+- Server digests are posted publicly, so they only include channels **@everyone can view**.
+  Staff or role-locked channels are still available to `/gnosis resume` for members who can read them.
+- Private `/gnosis` channels are never collected. Excluding a channel removes its messages from
+  digests and answers immediately.
+- Member keys are encrypted with `GNOSIS_SECRET_KEY` (falls back to the bot token). Changing
+  either invalidates saved keys; members re-run `/gnosis key`.
+- Obtain consent from the server's administrators and members before collecting messages.
+
+### Advanced: hand-picked channels and webhooks
+
+Turning **Read every channel** off makes Gnosis collect only channels added under
+**Discord → Sources** (or `sources.toml`), as in earlier versions. A Discord webhook or Telegram
+chat can still receive digests in addition to the digest channel; choose destinations whose
+audience may read every source of the server.
 
 ## Telegram and Reddit (optional)
 
