@@ -393,3 +393,9 @@ be verified in your environment.
 
 Further references: [dashboard architecture](docs/dashboard-shell.md),
 [example configuration](.env.example), [license](LICENSE).
+
+## Support the project
+
+Gnosis is free and open source. If it helps you, you can support its development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Y6U02AIRB8) [![PayPal](https://img.shields.io/badge/Support-PayPal-0070BA?logo=paypal&logoColor=white)](https://paypal.me/PrimeBuildOfficial)
