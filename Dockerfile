@@ -14,6 +14,8 @@ COPY config ./config
 RUN groupadd --gid 10001 gnosis && \
     useradd --create-home --uid 10001 --gid 10001 gnosis && mkdir -p /data/telegram && \
     chown -R gnosis:gnosis /app /data /tmp/fastembed_cache
+RUN python -m pip install --no-cache-dir --only-binary=:all: --upgrade pip==26.3 && \
+    python -m pip check
 USER gnosis
 
 CMD ["gnosis", "web"]
